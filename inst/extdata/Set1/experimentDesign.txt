@@ -1,0 +1,5 @@
+ID	file	paired	genotype
+wt_1	H3K4ME3_Full_length_Set1_Rep_1_YNL176C.bam	FALSE	0
+wt_2	H3K4ME3_Full_length_Set1_Rep_2_YNL176C.bam	FALSE	0
+mutant_1	H3K4ME3_aa762-1080_Set1_Rep_1_YNL176C.bam	FALSE	1
+mutant_2	H3K4ME3_aa762-1080_Set1_Rep_2_YNL176C.bam	FALSE	1

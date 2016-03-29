@@ -1,0 +1,40 @@
+Package: GenoGAM
+Type: Package
+Title: A GAM based framework for analysis of ChIP-Seq data
+Version: 0.99.1
+Date: 2016-03-13
+Authors@R: c(person("Georg", "Stricker", role = c("aut", "cre"), email
+        = "georg.stricker@in.tum.de"), person("Alexander",
+        "Engelhardt", role = c("aut"), email =
+        "alexander.engelhardt@ibe.med.uni-muenchen.de"),
+        person("Julien", "Gagneur", role = c("aut"), email =
+        "gagneur@in.tum.de") )
+Description: This package allows statistical analysis of genome-wide
+        data with smooth functions using generalized additive models
+        based on the implementation from the R-package 'mgcv'. It
+        provides methods for the statistical analysis of ChIP-Seq data
+        including inference of protein occupancy, and pointwise and
+        region-wise differential analysis. Estimation of dispersion and
+        smoothing parameters is performed by cross-validation. Scaling
+        of generalized additive model fitting to whole chromosomes is
+        achieved by parallelization over overlapping genomic intervals.
+License: GPL-2
+LazyData: true
+Depends: R (>= 3.3), Rsamtools (>= 1.18.2), SummarizedExperiment (>=
+        1.1.19), GenomicRanges (>= 1.23.16), methods
+Imports: BiocParallel (>= 1.5.17), data.table (>= 1.9.4), DESeq2 (>=
+        1.11.23), futile.logger (>= 1.4.1), GenomeInfoDb (>= 1.7.6),
+        GenomicAlignments (>= 1.7.17), IRanges (>= 2.5.30), mgcv (>=
+        1.8), reshape2 (>= 1.4.1), S4Vectors (>= 0.9.34)
+Suggests: BiocStyle, chipseq (>= 1.21.2), testthat, knitr
+VignetteBuilder: knitr
+NeedsCompilation: no
+RoxygenNote: 5.0.1.9000
+biocViews: Regression, DifferentialPeakCalling, ChIPSeq,
+        DifferentialExpression, Genetics, Epigenetics
+Collate: 'GenomicTiles-class.R' 'GenoGAMSettings-class.R'
+        'GenoGAM-class.R' 'GenoGAM-package.R' 'GenoGAMDataSet-class.R'
+        'cv.R' 'genogam.R' 'helper.R' 'readData.R' 'sf.R'
+Author: Georg Stricker [aut, cre], Alexander Engelhardt [aut], Julien
+        Gagneur [aut]
+Maintainer: Georg Stricker <georg.stricker@in.tum.de>
