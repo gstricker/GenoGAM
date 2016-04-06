@@ -1,7 +1,7 @@
 Package: GenoGAM
 Type: Package
 Title: A GAM based framework for analysis of ChIP-Seq data
-Version: 0.99.1
+Version: 0.99.2
 Date: 2016-03-13
 Authors@R: c(person("Georg", "Stricker", role = c("aut", "cre"), email
         = "georg.stricker@in.tum.de"), person("Alexander",
@@ -35,6 +35,8 @@ biocViews: Regression, DifferentialPeakCalling, ChIPSeq,
 Collate: 'GenomicTiles-class.R' 'GenoGAMSettings-class.R'
         'GenoGAM-class.R' 'GenoGAM-package.R' 'GenoGAMDataSet-class.R'
         'cv.R' 'genogam.R' 'helper.R' 'readData.R' 'sf.R'
+URL: https://github.com/gstricker/GenoGAM
+BugReports: https://github.com/gstricker/GenoGAM/issues
 Author: Georg Stricker [aut, cre], Alexander Engelhardt [aut], Julien
         Gagneur [aut]
 Maintainer: Georg Stricker <georg.stricker@in.tum.de>
