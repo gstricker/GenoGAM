@@ -9,10 +9,6 @@
 \usepackage{amsmath}
 \newcommand{\genogam}{\textit{GenoGAM}}
 \newcommand{\chipseq}{ChIP-Seq}
-%% Remove once BiocStyle works
-%% \newcommand{\Robject}{\texttt}
-%% \newcommand{\Rclass}{\texttt}
-%% \newcommand{\Rfunction}{\texttt}
 
 <<knitr, echo=FALSE, results="hide">>=
 library("knitr")
@@ -97,6 +93,27 @@ To this end, we will build a \genogam{} model that models the logarithm of the e
 
 where genotype is 1 for data from the mutant samples, and 0 for the wild type. Here the function $f(x)$ is the reference level, i.e. the log-rate in the wild type strain. The function $f_\text{mutant/wt}(x)$ is the log-ratio of the mutant over wild-type. We will then statistically test the null hypothesis $f_\text{mutant/wt}(x) = 0$ at each position $x$. In the following we show how to build the dataset, perform the fitting of the model and perform the testing. 
 
+\subsection{Registering a parallel backend}
+The parallel backend is registered using the \Biocpkg{BiocParallel} package. See the documentation in \Rclass{BiocParallel} for the correct use. Also note, that \Rclass{BiocParallel} is just an interface to multiple parallel packages. For example in order to use \genogam on a cluster, the \CRANpkg{BatchJobs} package might be required. The parallel backend should be registered before creating the \Rclass{GenoGAM} class, as this setup will be used throughout the analysis.
+
+<<parallel>>=
+library(GenoGAM)
+
+## On multicore machines by default the number of available cores - 2 are registered
+BiocParallel::registered()[1]
+@ 
+
+\newpage
+For this small example we would like to assign less workers and activate the progress bar. Check \Biocpkg{BiocParallel} for other possible backends and more options for \Rfunction{MulticoreParam}
+<<parallel-register>>=
+BiocParallel::register(BiocParallel::MulticoreParam(workers = 4, progressbar = TRUE))
+@ 
+
+If we check the current registered backend, we see that the number of workers has changed.
+<<check>>=
+BiocParallel::registered()[1]
+@ 
+
 \subsection{Building a \Rclass{GenoGAM} dataset}
 
 BAM files restricted to a region of chromosome XIV around the gene \emph{YNL176C} are provided in the \texttt{inst/extdata} folder of the \genogam{} package. This folder also contains a flat file describing the experimental design.   
@@ -105,7 +122,6 @@ We start by loading the experimental design from the tab-separated text file \te
 
 
 <<expdesign>>= 
-library(GenoGAM)
 
 folder <- system.file("extdata/Set1", package='GenoGAM')
 
@@ -116,7 +132,7 @@ expDesign <- read.delim(
 expDesign
 @
 
-Each row of the experiment design corresponds to the alignment files in BAM format of one ChIP sample. In case of multiplexed sequencing, the BAM files must have been demultiplexed. The experiment design have named columns. Three column names have a fixed meaning for \genogam{} and must be provided: \Robject{ID}, \Robject{file}, and \Robject{paired}. The field \Robject{ID} stores a unique identifier for each alignment file. It is recommended to use short and easy to understand identifiers because they are subsequently used for labelling data and plots. The field \Robject{file} stores the BAM file name. The field \Robject{paired} values \Robject{TRUE} for  paired-end sequencing data, and \Robject{FALSE} for single-end sequencing data. Further named columns can be added at wish without naming and data type constraints. Here the important one is the \Robject{genotype} column. Note that it is an indicator variable (i.e. valueing 0 or 1). It will allow us modeling the differential occupancy later on.
+Each row of the experiment design corresponds to the alignment files in BAM format of one ChIP sample. In case of multiplexed sequencing, the BAM files must have been demultiplexed. The experiment design have named columns. Three column names have a fixed meaning for \genogam{} and must be provided: \Robject{ID}, \Robject{file}, and \Robject{paired}. The field \Robject{ID} stores a unique identifier for each alignment file. It is recommended to use short and easy to understand identifiers because they are subsequently used for labelling data and plots. The field \Robject{file} stores the BAM file name. The field \Robject{paired} values \Robject{TRUE} for  paired-end sequencing data, and \Robject{FALSE} for single-end sequencing data. Further named columns can be added at wish without naming and data type constraints. Here the important one is the \Robject{genotype} column. Note that it is an indicator variable (i.e. valuing 0 or 1). It will allow us modeling the differential occupancy later on.
 
 We will now count sequencing fragment centers per genomic position and sample and store these counts into a \Rclass{GenoGAMDataSet}. \genogam{} reduces \chipseq{} data to fragment center counts rather than full base coverage so that each fragment is counted only once. This reduces artificial correlation between adjacent nucleotides. For single-end libraries, the fragment center is estimated by shifting the read end position by a constant (Details in the help on the constructor function \Rfunction{GenoGAMDataSet()}). 
 
@@ -141,7 +157,7 @@ A \Rclass{GenoGAMDataSet} stores this count data into a structure that index gen
 
 The \Robject{design} parameter is explained in the next section.
 
-Finally, the last line of code calls the function \Rfunction{subset()} to restrict the \Rclass{GenoGAMDataset} to the positions of interest. This line is necsessary for running this small example but would not be present in a standard genome-wide run of \genogam{}.
+Finally, the last line of code calls the function \Rfunction{subset()} to restrict the \Rclass{GenoGAMDataset} to the positions of interest. This line is necessary for running this small example but would not be present in a standard genome-wide run of \genogam{}.
 
 \subsection{Modeling with smooth functions: the \Robject{design} parameters}
 \genogam{} models the logarithm of the rate of the count data as sums of smooth functions of the genomic position, denoted \Robject{x}. The \Robject{design} parameter is an R formula which allows encoding how the smooth functions depend on the experimental design. \genogam follows formula convention of the R package \Rpackage{mgcv}. A smooth function is denoted \Robject{s()}. For now, \genogam{} only supports smooth function that are cubic splines of the genomic position \Robject{x}. The \Robject{by} variable allows selecting to which samples the smooth contributes to (see also the 
@@ -175,7 +191,7 @@ fit
 @
 
 
-\textbf{Remark on parameter estimation:} To estimate the parameters $\lambda$ and $\theta$ by cross-validation, call \Rfunction{genogam()} without setting theirt values. This will perform 10 fold cross-validation on each tile with initial parameter values and iterate until convergence, often for about 50 iterations. We recommend to do it for 20 to 40 different regions representative of your data (of 1.5kb each). This means that estimation of the parameters will require the equivalent of a \genogam{} fit with fixed $\lambda$ and $\theta$ on 30 Mb (1.5kb x10x40x50). For a genome like yeast (12Mb) the cross-validation thus can take more time than a genome-wide fit.
+\textbf{Remark on parameter estimation:} To estimate the parameters $\lambda$ and $\theta$ by cross-validation, call \Rfunction{genogam()} without setting their values. This will perform 10 fold cross-validation on each tile with initial parameter values and iterate until convergence, often for about 50 iterations. We recommend to do it for 20 to 40 different regions representative of your data (of 1.5kb each). This means that estimation of the parameters will require the equivalent of a \genogam{} fit with fixed $\lambda$ and $\theta$ on 30 Mb (1.5kb x10x40x50). For a genome like yeast (12Mb) the cross-validation thus can take more time than a genome-wide fit.
 
 <<fitwithcv, eval=FALSE>>=
 fit_CV <- genogam(ggd,bpknots = bpk)
@@ -240,7 +256,7 @@ fitplot(df_fit, 's(x):genotype', xlab="", main="")
 @
 
 \subsection{Statistical testing}
-We test for each smooth and at each position $x$ the null hypothesis that it values 0 by a call to \Rfunction{computeSignificance()}. False discovery rate can bve computed using the Benjamini-Hochberg procedure with the R function \Rfunction{p.adjust()}: 
+We test for each smooth and at each position $x$ the null hypothesis that it values 0 by a call to \Rfunction{computeSignificance()}. False discovery rate can be computed using the Benjamini-Hochberg procedure with the R function \Rfunction{p.adjust()}: 
 
 <<signif>>=
 fit <- computeSignificance(fit)
@@ -249,10 +265,13 @@ df_fit[["fdr.s(x):genotype"]] <- p.adjust(df_fit[["pvalue.s(x):genotype"]], meth
 head(df_fit)
 @
 
+\section{Other functionalities}
+Other functionalities demonstrated in the manuscript (peak calling and testing, methylation data, See [Biorxiv REF to come shortly]) will be gradually integrated into the package. Interested users should check the developer version of \Biocpkg{GenoGAM} for updates.
+% https://www.bioconductor.org/packages/devel/bioc/html/GenoGAM.html] of the \genogam{} package for updates.
 
 \section{Acknowledgments}
 
-We thank Alexander Engelhardt, Herv\'e Pag\`es, and Martin Morgan for input in the developement of \genogam{}. 
+We thank Alexander Engelhardt, Herv\'e Pag\`es, and Martin Morgan for input in the development of \genogam{}. 
 
 \section{Session Info}
 
