@@ -266,8 +266,7 @@ head(df_fit)
 @
 
 \section{Other functionalities}
-Other functionalities demonstrated in the manuscript (peak calling and testing, methylation data, See [Biorxiv REF to come shortly]) will be gradually integrated into the package. Interested users should check the developer version of \Biocpkg{GenoGAM} for updates.
-% https://www.bioconductor.org/packages/devel/bioc/html/GenoGAM.html] of the \genogam{} package for updates.
+Other functionalities demonstrated in the manuscript (peak calling and testing, methylation data, see BioRxiv: \url{http://dx.doi.org/10.1101/047464}) will be gradually integrated into the package. Interested users should check the developer version of \Biocpkg{GenoGAM} for updates.
 
 \section{Acknowledgments}
 
