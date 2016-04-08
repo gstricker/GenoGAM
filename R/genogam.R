@@ -107,12 +107,13 @@ genogam <- function(ggd, lambda = NULL, family = mgcv::nb(),
     ## How many splines?
     vars <- .getVars(formula)[-1]
     nsplines <- length(vars)
-    ncv <- min(20, length(data))
 
     ## convert data
     futile.logger::flog.info("Process data")
     data <- getTile(ggd)
     chunkCoords <- getChunkIndex(ggd)
+
+    ncv <- min(20, length(data))
 
     if(is.null(lambda) | is.null(theta)) {
         futile.logger::flog.info("Estimating parameters")
