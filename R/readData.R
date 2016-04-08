@@ -321,13 +321,22 @@
 #' @author Georg Stricker \email{stricker@@genzentrum.lmu.de}
 .getPairedCenters <- function(chunk) {
     if(length(chunk) == 0) return(integer())
-    fragmentSize <-  end(right(chunk)) - start(left(chunk))
+    strand <- runValue(strand(chunk))
+    if(strand == "+") {
+        fragmentSize <-  end(last(chunk)) - start(first(chunk))
+        midpoints <- (start(first(chunk)) + end(last(chunk)))/2
+    }
+    if(strand == "-") {
+        fragmentSize <-  end(first(chunk)) - start(last(chunk))
+        midpoints <- (start(last(chunk)) + end(first(chunk)))/2
+    }
     maxAllowedFragSize <- 2*median(fragmentSize)
     falseFragments <- which(fragmentSize > maxAllowedFragSize)
-    midpoints <- (start(left(chunk)) + end(right(chunk)))/2
+    
     if (length(falseFragments) > 0) {
         midpoints <- midpoints[-falseFragments]
     }
+    midpoints <- sort(as.integer(floor(midpoints)))
     return(midpoints)
 }
 
