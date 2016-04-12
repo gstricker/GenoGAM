@@ -69,6 +69,7 @@
     ids <- expand.grid(folds = 1:length(CV_intervals), tiles = 1:length(gtiles))
     
     cvs <- bplapply(1:nrow(ids), function(ii){
+        require(GenoGAM, quietly = TRUE)
         id <- ids[ii,]
         
         testset <- gtiles[[id$tiles]][CV_intervals[[id$folds]],]

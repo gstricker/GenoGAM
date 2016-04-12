@@ -1074,6 +1074,7 @@ setMethod("subsetByOverlaps", c("GenomicTiles", "GRanges"),
                       ceiling(seq_along(mcols(index)$id)/blockSize)))
     
     dfList <- do.call(c, bplapply(blockList, function(y) {
+        require(GenoGAM, quietly = TRUE)
         blockindx <- index[mcols(index)$id == y]
         subgt <- .subsetByOverlaps(gt, blockindx)
         df <- DataFrame(subgt)

@@ -147,6 +147,7 @@ genogam <- function(ggd, lambda = NULL, family = mgcv::nb(),
 
     futile.logger::flog.info("Fitting model")
     res <- bplapply(1:length(data), function(ii) {
+        require(GenoGAM, quietly = TRUE)
         df <- .meltGTile(list(data[[ii]]), colData(ggd), sizeFactors(ggd), formula)
         mod <- mgcv::gam(formula, df[[1]], family = family, sp = rep(lambda, nsplines))
         fits <- .getFunctions(mod, df[[1]])
@@ -160,7 +161,7 @@ genogam <- function(ggd, lambda = NULL, family = mgcv::nb(),
 
     ## create GenoGAM object
     fitparams <- c(lambda = unname(lambda), theta = unname(family$getTheta(trans = TRUE)),
-                   CoV = sqrt(1/(family$getTheta(trans = TRUE))), penorder = m)
+                   CoV = sqrt(1/unname(family$getTheta(trans = TRUE))), penorder = m)
     cvparams <- c(kfolds = kfolds, ncv = ncv, size = intervallSize, cv = cv)
     tempFormula <- gsub("pos", "x", formula)
     saveFormula <- as.formula(paste(tempFormula[2], tempFormula[1], tempFormula[3]))

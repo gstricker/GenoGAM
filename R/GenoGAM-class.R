@@ -157,7 +157,7 @@ setValidity2("GenoGAM", .validateGenoGAM)
 
     cat("\n")
     cat("Cross Validation:")
-    if(is.logical(cvparams["cv"]) & cvparams["cv"]) cat(" Performed\n")
+    if(!is.na(cvparams["cv"]) & cvparams["cv"] > 0) cat(" Performed\n")
     else cat(" Not performed\n")
     cat("  K-folds:", cvparams["kfolds"], "\n")
     cat("  Number of tiles:", cvparams["ncv"], "\n")
@@ -229,10 +229,10 @@ setMethod("getFits", "GenoGAM", function(object) object@fits)
 }
 
 .subsetByPosition <- function(gg, ...) {
-    pos <- slot(gg, "positions")
-    ov <- findOverlaps(pos, subset(pos, ...))
+    positions <- slot(gg, "positions")
+    ov <- findOverlaps(positions, subset(positions, ...))
     indx <- queryHits(ov)
-    slot(gg, "positions") <- pos[indx,]
+    slot(gg, "positions") <- positions[indx,]
     slot(gg, "fits") <- slot(gg, "fits")[indx,]
     return(gg)
 }
@@ -294,7 +294,10 @@ setMethod("subsetByOverlaps", "GenoGAM", function(query, subject) {
 #' @export
 setMethod("view", "GenoGAM", function(object, ranges = NULL, seqnames = NULL,
                                       start = NULL, end = NULL) {
-    if((is.null(seqnames) | is.null(start) | is.null(end)) & is.null(ranges)) {
+    ## keep "seqnames" for consistency with Bioc, but rename variable as subset in
+    ## .subsetByPosition does not work properly otherwise
+    chromosome <- seqnames 
+    if(is.null(seqnames) & is.null(start) & is.null(end) & is.null(ranges)) {
         temp <- object
     }
     else {
@@ -302,7 +305,18 @@ setMethod("view", "GenoGAM", function(object, ranges = NULL, seqnames = NULL,
             temp <- .subsetByRanges(object, ranges)
         }
         else {
-            temp <- .subsetByPosition(object, seqnames == seqnames & pos >= start & pos <= end)
+            if(is.null(start)) {
+                start <- 1
+            }
+            if(is.null(end)) {
+                end <- Inf
+            }
+            if(is.null(seqnames)){
+                temp <- .subsetByPosition(object, pos >= start & pos <= end)
+            }
+            else {
+                temp <- .subsetByPosition(object, seqnames == chromosome & pos >= start & pos <= end)
+            }
         }
     }
     res <- cbind(slot(temp, "positions"), slot(temp, "fits"))
