@@ -1,0 +1,19 @@
+FEATURES IN VERSION 1.0.0
+-------------------------
+	o GenoGAMDataSet() to store read count data efficiently in an object that is designed
+	  for parallel use.
+	  
+	o computeSizeFactors() computes normalization factors based on DESeq2.
+	
+	o genogam() fits a Generalized Additive Model over the entire data
+	  given an experimental design. Results are pointwise smooth functions
+	  with pointwise standard errors. The overdispersion and penalization
+	  parameter are estimated from the data
+
+	o computeSignificance() provides pointwise p-values
+
+	o parallel computation executed where necessary using the BiocParallel
+	  package. BiocParallel provides an easy way of registering the desired
+	  parallel backend
+
+	o vignette for example workflow

@@ -73,7 +73,7 @@
     
     # run BAM reading in parallel. Check backend by bpparam().
     res <- bplapply(1:length(chunkGRanges), function(ii) {
-        ##require(genoGAM, quietly = TRUE)
+        require(GenoGAM, quietly = TRUE)
         Rsamtools::bamWhich(params) <- chunkGRanges[ii]
         if (asMates) reads <- GenomicAlignments::readGAlignmentPairs(path, index = indexFile, param = params)
         else reads <- GenomicAlignments::readGAlignments(path, index = indexFile, param = params)
