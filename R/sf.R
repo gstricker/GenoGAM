@@ -32,7 +32,7 @@ computeSizeFactors <- function(ggd, factorGroups = NULL) {
     ## compute sizeFactors
     sf <- NULL
         for(elem in factorGroups) {
-            dds <- .normalize(sumMatrix, factor(elem))
+            dds <- .normalize(sumMatrix[,elem], factor(elem))
             sf <- c(sf, log(DESeq2::sizeFactors(dds)))
         }
 
