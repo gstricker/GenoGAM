@@ -302,7 +302,7 @@ setGeneric("getIndex", function(object, ...) standardGeneric("getIndex"))
 #' @param object A /code{GenomicTiles} object.
 #' @param id A vector if tile ids. By default the complete index is returned.
 #' @param ... Additional arguments
-#' @return A /code{GRanges} object representing the index
+#' @return A |code{GRanges} object representing the index
 #' @examples 
 #' gt <- makeTestGenomicTiles()
 #' getIndex(gt)
