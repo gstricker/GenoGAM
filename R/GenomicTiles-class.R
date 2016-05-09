@@ -259,10 +259,11 @@ GenomicTiles <- function(assays, chunkSize = 1e4, overhangSize = 0, ...) {
 #' @return A GRanges object of the row coordinates.
 .makeCoordinates <- function(gp) {
     gpCoords <- gp@pos_runs
-    gpDims <- length(gpCoords)
+    chroms <- seqlevels(gpCoords)
     if(length(gpCoords) > 0) {
-        ir <- IRanges(start = cumsum(c(1, end(gpCoords)[-gpDims[1]])),
-                      end = cumsum(width(gpCoords)))
+        widths <- sapply(chroms, function(y) sum(width(gpCoords[seqnames(gpCoords) == y,])))
+        ir <- IRanges(start = cumsum(c(1, widths[-length(widths)])),
+                      end = cumsum(widths))
     }
     else {
         ir <- IRanges()
