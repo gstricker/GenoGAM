@@ -132,6 +132,22 @@ setValidity2("GenoGAM", .validateGenoGAM)
     return(new("GenoGAM", ...))
 }
 
+## Accessors
+## =========
+
+#' Accessor to the 'positions' slot
+#'
+#' The positions slot holds the positions of the fits as a |code{GPos} object
+#'
+#' @rdname GenoGAM-methods
+#' @param object A /code{GenoGAM} object.
+#' @return A |code{GPos} object representing the positions
+#' @author Georg Stricker \email{georg.stricker@@in.tum.de}
+#' @export
+setMethod("rowRanges", "GenoGAM", function(x) {
+    x@positions
+})
+
 ## Cosmetics
 ## ==========
 
