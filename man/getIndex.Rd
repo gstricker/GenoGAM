@@ -18,7 +18,7 @@ getIndex(object, ...)
 \item{id}{A vector if tile ids. By default the complete index is returned.}
 }
 \value{
-A /code{GRanges} object representing the index
+A |code{GRanges} object representing the index
 }
 \description{
 The index holds the Granges object that splits the entire dataset in
