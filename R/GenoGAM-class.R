@@ -141,7 +141,7 @@ setValidity2("GenoGAM", .validateGenoGAM)
 #'
 #' @rdname GenoGAM-methods
 #' @param object A /code{GenoGAM} object.
-#' @return A |code{GPos} object representing the positions
+#' @return A \code{GPos} object representing the positions
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @export
 setMethod("rowRanges", "GenoGAM", function(x) {
