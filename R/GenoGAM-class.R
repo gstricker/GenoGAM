@@ -140,7 +140,7 @@ setValidity2("GenoGAM", .validateGenoGAM)
 #' The positions slot holds the positions of the fits as a |code{GPos} object
 #'
 #' @rdname GenoGAM-methods
-#' @param object A /code{GenoGAM} object.
+#' @param x A \code{GenoGAM} object.
 #' @return A \code{GPos} object representing the positions
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @export

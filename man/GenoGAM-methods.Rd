@@ -8,10 +8,10 @@
 \S4method{rowRanges}{GenoGAM}(x)
 }
 \arguments{
-\item{object}{A /code{GenoGAM} object.}
+\item{x}{A \code{GenoGAM} object.}
 }
 \value{
-A |code{GPos} object representing the positions
+A \code{GPos} object representing the positions
 }
 \description{
 The positions slot holds the positions of the fits as a |code{GPos} object
