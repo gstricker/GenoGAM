@@ -36,10 +36,12 @@ Imports:
     IRanges (>= 2.5.30),
     mgcv (>= 1.8),
     reshape2 (>= 1.4.1),
-    S4Vectors (>= 0.9.34)
+    S4Vectors (>= 0.9.34),
+    Biostrings (>= 2.39.14)
 Suggests:
     BiocStyle,
     chipseq (>= 1.21.2),
+    LSD (>= 3.0.0),
     testthat,
     knitr
 VignetteBuilder: knitr

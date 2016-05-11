@@ -78,6 +78,9 @@ setValidity2("GenoGAMDataSet", .validateGenoGAMDataSet)
 #' @param design A mgcv-like formula object. See details for its structure.
 #' @param directory The directory from which to read the data. By default
 #' the current working directory is taken.
+#' @param qc A logical value indicating if quality checks should be performed or not.
+#' If yes, the folder 'qc' will be created in the working directory (if not yet present),
+#' and plots displaying particular features of the dataset will be stored as PNG files.
 #' @param ... Further parameters, mostly for arguments of custom processing
 #' functions or to specify a different method for fragment size estimation.
 #' See details for further information.
@@ -134,7 +137,7 @@ setValidity2("GenoGAMDataSet", .validateGenoGAMDataSet)
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @export
 GenoGAMDataSet <- function(experimentDesign, chunkSize, overhangSize, design,
-                          directory = ".", ...) {
+                          directory = ".", qc = TRUE, ...) {
 
     if(missing(experimentDesign)) {
         gt <- GenomicTiles()
@@ -157,6 +160,10 @@ GenoGAMDataSet <- function(experimentDesign, chunkSize, overhangSize, design,
                                         settings = NULL, ...)
     }
     
+    if(qc) {
+        factorGroups <- guessFactorGroups(colData(gt))
+        qcGenoGAMDataSet(gt, factorGroups)
+    }
     return(gt)
 }
 

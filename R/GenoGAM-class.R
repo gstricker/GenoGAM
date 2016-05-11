@@ -140,13 +140,43 @@ setValidity2("GenoGAM", .validateGenoGAM)
 #' The positions slot holds the positions of the fits as a |code{GPos} object
 #'
 #' @rdname GenoGAM-methods
-#' @param x A \code{GenoGAM} object.
+#' @param object A \code{GenoGAM} object.
 #' @return A \code{GPos} object representing the positions
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @export
 setMethod("rowRanges", "GenoGAM", function(x) {
     x@positions
 })
+
+#' Accessor to the 'experimentDesign' slot
+#'
+#' The positions slot holds the experiment design of the fits as a |code{GPos} object
+#'
+#' @rdname GenoGAM-methods
+#' @param object A \code{GenoGAM} object.
+#' @return An experiment design matrix
+#' @author Georg Stricker \email{georg.stricker@@in.tum.de}
+#' @export
+setMethod("design", "GenoGAM", function(object) {
+    object@experimentDesign
+})
+
+#' @rdname GenoGAM-methods
+#' @export
+setGeneric("getFits", function(object) standardGeneric("getFits"))
+
+#' Accessor to \code{fits} slot
+#'
+#' The \code{fits} slot contains the fitted values of the model
+#'
+#' @param object A \code{GenomicTiles} object
+#' @return A data.frame of the fits
+#' @examples
+#' gg <- makeTestGenoGAM()
+#' fits <- getFits(gg)
+#' @rdname GenoGAM-methods
+#' @export
+setMethod("getFits", "GenoGAM", function(object) object@fits)
 
 ## Cosmetics
 ## ==========
@@ -217,23 +247,6 @@ makeTestGenoGAM <- function() {
     slot(gg, "fits") <- fits
     return(gg)
 }
-
-#' @rdname getFits
-#' @export
-setGeneric("getFits", function(object) standardGeneric("getFits"))
-
-#' Accessor to \code{fits} slot
-#'
-#' The \code{fits} slot contains the fitted values of the model
-#'
-#' @param object A \code{GenomicTiles} object
-#' @return A data.frame of the fits
-#' @examples
-#' gg <- makeTestGenoGAM()
-#' fits <- getFits(gg)
-#' @rdname getFits
-#' @export
-setMethod("getFits", "GenoGAM", function(object) object@fits)
 
 .subsetByRanges <- function(gg, ranges) {
     pos <- slot(gg, "positions")
@@ -380,6 +393,64 @@ computeSignificance <- function(gg, log.p = FALSE) {
     .result(gg, log.p = log.p)
 }
 
+plot.GenoGAM <- function(object, ranges = NULL, seqnames = NULL,
+                         start = NULL, end = NULL, scale = TRUE,
+                         pages = 1, select = NULL) {
+    base <- TRUE
+    if(require(ggplot2)) {
+        base <- FALSE
+    }
+    sub <- view(ranges = ranges, seqnames = seqnames,
+                start = start, end = end)
+    if(is.null(select)) {
+        select <- c("s(x)", paste("s(x)", colnames(design(object)), sep = ":"))
+    }
+    else {
+        select <- paste("s(x)", select, sep = ":")
+    }
+
+    if(base) {
+        plot_base(sub, scale = scale, pages = pages,
+                  select = select)
+    }
+}
+
+plot_ggplot2 <- function(df, scale = TRUE, pages = 1,
+                      select = NULL) {
+    
+}
+
+plot_base <- function(df, scale = TRUE, pages = 1,
+                      select = NULL) {
+    
+    numPlots <- length(select)
+    x <- df$pos
+    y <- df[,select, drop = FALSE]
+    upper <- y + 1.96*df[,paste("se", select, sep = "."), drop = FALSE]
+    lower <- y - 1.96*df[,paste("se", select, sep = "."), drop = FALSE]
+    xlab <- paste("Genomic poisition on", as.character(unique(df$seqnames)))
+
+    if(scale) {
+        ylim <- c(min(lower), max(upper))
+    }
+    
+    if(pages <= 1) {
+        par(mfrow = c(numPlots, 1))
+    }
+    for(track in select) {
+        if(pages > 1) {
+            X11()
+        }
+        if(!scale) {
+            ylim = range(lower[[track]], upper[[track]])
+        }
+        plot(x, y[[track]], ylim = ylim, xlab = xlab, ylab = "log-fit", type = "l",
+             main = track)
+        lines(x, upper[[track]], lty = "dotted")
+        lines(x, lower[[track]], lty = "dotted")
+        abline(h = 0)
+    }
+}
 
 ## #' Prediction from fitted GenoGAM
 ## #'
