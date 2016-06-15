@@ -181,70 +181,111 @@ GenomicTiles <- function(assays, chunkSize = 1e4, overhangSize = 0, ...) {
 }
 
 
+## #' A function to produce a GRanges index from a list of settings.
+## #'
+## #' @param l A list of settings.
+## #' @return A Granges object of the tiles.
+## .makeTiles <- function(l) {
+
+##     if(length(l) == 0) return(GenomicRanges::GRanges())
+
+##     duplicates <- FALSE
+
+##     ## make chunks
+##     chroms <- width(l$chromosomes)
+##     names(chroms) <- GenomeInfoDb::seqnames(l$chromosomes)
+
+##     ## if regionsa re smaller than requested tileSize
+##     if(any(l$tileSize > chroms)) {
+##         shrink <- min(chroms)/l$tileSize
+##         l$tileSize <- round(l$tileSize * shrink)
+##         l$chunkSize <- round(l$chunkSize * shrink)
+##         l$overhangSize <- round(l$overhangSize * shrink)
+##     }
+
+##     if(any(duplicated(names(chroms)))) {
+##         backupChroms <- l$chromosomes
+##         names(chroms) <- paste(names(chroms), 1:length(chroms), sep = ".")
+##         l$chromosomes <- GenomicRanges::GRanges(names(chroms), ranges(l$chromosomes))
+##         duplicates <- TRUE
+##     }
+    
+##     chunks <- unlist(GenomicRanges::tileGenome(chroms, tilewidth = l$chunkSize,
+##                         cut.last.tile.in.chrom = FALSE))
+##     chunks <- suppressWarnings(IRanges::shift(chunks, width(chunks)/2))
+
+##     ## add overhang and expand to tiles
+##     tiles <- suppressWarnings(trim(flank(chunks, round(l$tileSize/2),
+##                                          both = TRUE)))
+
+##     ## resize start and end tiles till correct tile size is reached
+##     startsToResize <- which(width(tiles) < l$tileSize & start(tiles) == 1)
+##     tiles[startsToResize] <- resize(tiles[startsToResize],
+##                                     width = l$tileSize)
+##     endsToResize <- which(width(tiles) < l$tileSize)
+##     tiles[endsToResize] <- resize(tiles[endsToResize],
+##                                   width = l$tileSize, fix = "end")
+
+##     tiles <- tiles[!duplicated(tiles)]
+
+##     ## if there was a shift such that seqlengths got deleted
+##     if(any(is.na(c(GenomeInfoDb::seqlengths(tiles), GenomeInfoDb::seqlengths(l$chromosomes)))) |
+##        any(GenomeInfoDb::seqlengths(tiles) != GenomeInfoDb::seqlengths(l$chromosomes))) {
+##         GenomeInfoDb::seqlengths(tiles) <- GenomeInfoDb::seqlengths(l$chromosomes)
+##         regions <- splitAsList(l$chromosomes, GenomeInfoDb::seqlevels(l$chromosomes))
+##         tiles <- do.call(c, lapply(GenomeInfoDb::seqlevels(tiles), function(y) {
+##             IRanges::shift(tiles[GenomeInfoDb::seqnames(tiles) == y], start(regions[[y]]) - 1)
+##                           }))
+##     }
+
+##     if(duplicates) {
+##         temp <- strsplit(as.character(GenomeInfoDb::seqnames(tiles)), split = "\\.")
+##         newSeqnames <- sapply(temp, function(y) y[1])
+##         tiles <- GenomicRanges::GRanges(newSeqnames, ranges(tiles))
+##         l$chromosomes <- backupChroms
+##     }
+##     GenomeInfoDb::seqlengths(tiles) <- GenomeInfoDb::seqlengths(l$chromosomes)
+
+##     ## add 'id' and 'dist' column and put settings in metadata
+##     mcols(tiles)$id <- 1:length(tiles)
+##     l$numTiles <- length(tiles)
+##     metadata(tiles) <- l
+##     return(tiles)
+## }
+
 #' A function to produce a GRanges index from a list of settings.
 #'
 #' @param l A list of settings.
-#' @return A Granges object of the tiles.
+#' @return A |code{GRanges} object of the tiles.
 .makeTiles <- function(l) {
 
     if(length(l) == 0) return(GenomicRanges::GRanges())
 
-    duplicates <- FALSE
+    tileList <- BiocParallel::bplapply(l$chromosomes, function(y) {
+        nchunks <- ceiling(width(y)/l$chunkSize)
+        starts <- start(y) + seq(0, nchunks - 1) * l$chunkSize
+        ends <- c(start(y) + seq(1, nchunks - 1) * l$chunkSize - 1, end(y))
+        chunks <- GenomicRanges::GRanges(seqnames = seqnames(y), IRanges(starts, ends))
+        chunks <- suppressWarnings(IRanges::shift(chunks, round(width(chunks)/2)))
+        tiles <- suppressWarnings(trim(flank(chunks, round(l$tileSize/2),
+                                             both = TRUE)))
 
-    ## make chunks
-    chroms <- width(l$chromosomes)
-    names(chroms) <- GenomeInfoDb::seqnames(l$chromosomes)
+        ## adjust first tile
+        startsToResize <- which(start(tiles) < start(y))
+        end(tiles[startsToResize]) <- end(tiles[startsToResize]) + start(y) - start(tiles[startsToResize])
+        start(tiles[startsToResize]) <- start(y)
 
-    ## if regionsa re smaller than requested tileSize
-    if(any(l$tileSize > chroms)) {
-        shrink <- min(chroms)/l$tileSize
-        l$tileSize <- round(l$tileSize * shrink)
-        l$chunkSize <- round(l$chunkSize * shrink)
-        l$overhangSize <- round(l$overhangSize * shrink)
-    }
+        ## adjust last tile
+        endsToResize <- which(end(tiles) > end(y))
+        start(tiles[endsToResize]) <- start(tiles[endsToResize]) - end(tiles[endsToResize]) + end(y)
+        end(tiles[endsToResize]) <- end(y)
 
-    if(any(duplicated(names(chroms)))) {
-        backupChroms <- l$chromosomes
-        names(chroms) <- paste(names(chroms), 1:length(chroms), sep = ".")
-        l$chromosomes <- GenomicRanges::GRanges(names(chroms), ranges(l$chromosomes))
-        duplicates <- TRUE
-    }
-    
-    chunks <- unlist(GenomicRanges::tileGenome(chroms, tilewidth = l$chunkSize,
-                        cut.last.tile.in.chrom = FALSE))
-    chunks <- suppressWarnings(IRanges::shift(chunks, width(chunks)/2))
+        ## remove duplicate tiles if present
+        tiles <- unique(tiles)
+        return(tiles)
+    })
 
-    ## add overhang and expand to tiles
-    tiles <- suppressWarnings(trim(flank(chunks, round(l$tileSize/2),
-                                         both = TRUE)))
-
-    ## resize start and end tiles till correct tile size is reached
-    startsToResize <- which(width(tiles) < l$tileSize & start(tiles) == 1)
-    tiles[startsToResize] <- resize(tiles[startsToResize],
-                                    width = l$tileSize)
-    endsToResize <- which(width(tiles) < l$tileSize)
-    tiles[endsToResize] <- resize(tiles[endsToResize],
-                                  width = l$tileSize, fix = "end")
-
-    tiles <- tiles[!duplicated(tiles)]
-
-    ## if there was a shift such that seqlengths got deleted
-    if(any(is.na(c(GenomeInfoDb::seqlengths(tiles), GenomeInfoDb::seqlengths(l$chromosomes)))) |
-       any(GenomeInfoDb::seqlengths(tiles) != GenomeInfoDb::seqlengths(l$chromosomes))) {
-        GenomeInfoDb::seqlengths(tiles) <- GenomeInfoDb::seqlengths(l$chromosomes)
-        regions <- splitAsList(l$chromosomes, GenomeInfoDb::seqlevels(l$chromosomes))
-        tiles <- do.call(c, lapply(GenomeInfoDb::seqlevels(tiles), function(y) {
-            IRanges::shift(tiles[GenomeInfoDb::seqnames(tiles) == y], start(regions[[y]]) - 1)
-                          }))
-    }
-
-    if(duplicates) {
-        temp <- strsplit(as.character(GenomeInfoDb::seqnames(tiles)), split = "\\.")
-        newSeqnames <- sapply(temp, function(y) y[1])
-        tiles <- GenomicRanges::GRanges(newSeqnames, ranges(tiles))
-        l$chromosomes <- backupChroms
-    }
-    GenomeInfoDb::seqlengths(tiles) <- GenomeInfoDb::seqlengths(l$chromosomes)
+    tiles <- do.call("c", tileList)
 
     ## add 'id' and 'dist' column and put settings in metadata
     mcols(tiles)$id <- 1:length(tiles)
