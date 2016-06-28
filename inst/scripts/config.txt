@@ -1,0 +1,3 @@
+ID	file	paired	tfiib
+input	TFIIB_Inp.bam	FALSE	0
+IP	TFIIB_IP.bam	FALSE	1
