@@ -56,9 +56,11 @@ Collate:
     'GenoGAM-package.R'
     'GenoGAMDataSet-class.R'
     'cv.R'
+    'devel.R'
     'diffBinding.R'
     'genogam.R'
     'helper.R'
+    'qc.R'
     'readData.R'
     'sf.R'
 URL: https://github.com/gstricker/GenoGAM

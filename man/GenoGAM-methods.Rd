@@ -2,21 +2,48 @@
 % Please edit documentation in R/GenoGAM-class.R
 \docType{methods}
 \name{rowRanges,GenoGAM-method}
+\alias{design,GenoGAM-method}
+\alias{getFits}
+\alias{getFits,GenoGAM-method}
 \alias{rowRanges,GenoGAM-method}
 \title{Accessor to the 'positions' slot}
 \usage{
 \S4method{rowRanges}{GenoGAM}(x)
+
+\S4method{design}{GenoGAM}(object)
+
+getFits(object)
+
+\S4method{getFits}{GenoGAM}(object)
 }
 \arguments{
-\item{x}{A \code{GenoGAM} object.}
+\item{object}{A \code{GenoGAM} object.}
+
+\item{object}{A \code{GenoGAM} object.}
+
+\item{object}{A \code{GenomicTiles} object}
 }
 \value{
 A \code{GPos} object representing the positions
+
+An experiment design matrix
+
+A data.frame of the fits
 }
 \description{
 The positions slot holds the positions of the fits as a |code{GPos} object
+
+The positions slot holds the experiment design of the fits as a |code{GPos} object
+
+The \code{fits} slot contains the fitted values of the model
+}
+\examples{
+gg <- makeTestGenoGAM()
+fits <- getFits(gg)
 }
 \author{
+Georg Stricker \email{georg.stricker@in.tum.de}
+
 Georg Stricker \email{georg.stricker@in.tum.de}
 }
 

@@ -9,6 +9,7 @@
 #' one mutual position.
 #' @return A |code{GRanges} object of size <= the initial ranges object
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
+#' @noRd
 mergeRanges <- function(ranges, overlap = 0) {
     mergedGRanges <- sapply(seqlevels(ranges), function(y) {
         subgr <- ranges[seqnames(ranges) == y,]
@@ -36,6 +37,7 @@ mergeRanges <- function(ranges, overlap = 0) {
 #' @param mode Should the sum or the mean of counts be used?
 #' @return A |code{GRanges} object containing the filtered regions
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
+#' @noRd
 compute_filter <- function(ggd, threshold = NULL, windowsize = 201, mode = c("sum", "mean")) {
 
     mode <- match.arg(mode)
@@ -103,6 +105,7 @@ compute_filter <- function(ggd, threshold = NULL, windowsize = 201, mode = c("su
 #' @param mode Should the sum or the mean of counts be used?
 #' @return A |code{GenoGAMDataSet} object containing the filtered regions
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
+#' @noRd
 filter <- function(ggd, threshold = NULL, windowsize = 201, mode = c("sum", "mean")) {
    
     mode <- match.arg(mode)

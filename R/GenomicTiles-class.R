@@ -272,12 +272,12 @@ GenomicTiles <- function(assays, chunkSize = 1e4, overhangSize = 0, ...) {
 
         ## adjust first tile
         startsToResize <- which(start(tiles) < start(y))
-        end(tiles[startsToResize]) <- end(tiles[startsToResize]) + start(y) - start(tiles[startsToResize])
+        end(tiles[startsToResize]) <- min(end(tiles[startsToResize]) + start(y) - start(tiles[startsToResize]), end(y))
         start(tiles[startsToResize]) <- start(y)
 
         ## adjust last tile
         endsToResize <- which(end(tiles) > end(y))
-        start(tiles[endsToResize]) <- start(tiles[endsToResize]) - end(tiles[endsToResize]) + end(y)
+        start(tiles[endsToResize]) <- max(start(tiles[endsToResize]) - end(tiles[endsToResize]) + end(y), start(y))
         end(tiles[endsToResize]) <- end(y)
 
         ## remove duplicate tiles if present
@@ -286,6 +286,7 @@ GenomicTiles <- function(assays, chunkSize = 1e4, overhangSize = 0, ...) {
     })
 
     tiles <- do.call("c", tileList)
+    seqlengths(tiles) <- sapply(seqlevels(tiles), function(y) max(end(tiles[seqnames(tiles) == y])))
 
     ## add 'id' and 'dist' column and put settings in metadata
     mcols(tiles)$id <- 1:length(tiles)
