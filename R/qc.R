@@ -1,4 +1,10 @@
-## Get number of plot columns
+## Functions for quality checks for different objects
+
+## Get number of plot columns dependent on the factor groups
+#' @param factorGroups A list representing the groups. Each element is a group containing
+#' the names of the samples belonging to it
+#' @return Number of columns needed for multi-plotting
+#' @noRd
 getNumCols <- function(factorGroups) {
     ## all plot within groups
     pcols <- sum(sapply(factorGroups, function(y) {
@@ -9,8 +15,14 @@ getNumCols <- function(factorGroups) {
     return(pcols)
 }
 
-## plotting routine
-plotQC <- function(object, factorGroups, plotPath) {
+## plotting routine for GenoGAMDataSet
+#' @param object A \code{GenoGAMDataSet} object
+#' @param factorGroups A list representing the groups. Each element is a group containing
+#' the names of the samples belonging to it
+#' @param plotPath The file to plot to
+#' @return NULL. A plot is saved to given directory
+#' @noRd
+plotQC_GenoGAMDataSet <- function(object, factorGroups, plotPath) {
     pcols <- getNumCols(factorGroups)
     prows <- length(object)
     png(plotPath, height = 1000, width = 1600)
@@ -27,7 +39,7 @@ plotQC <- function(object, factorGroups, plotPath) {
             }
             for (jj in 1:(len - 1)) {
                 for(kk in (jj + 1) : len) {
-                    heatscatter(object[[ii]][,elem[jj]], object[[ii]][,elem[kk]], log = "xy",
+                    LSD::heatscatter(object[[ii]][,elem[jj]], object[[ii]][,elem[kk]], log = "xy",
                                 main = paste(elem[jj], "vs.", elem[kk], names(object)[ii]),
                                 xlab = elem[jj], ylab = elem[kk])
                     abline(0,1)
@@ -53,7 +65,7 @@ plotQC <- function(object, factorGroups, plotPath) {
                     else {
                         y <- object[[ii]][,factorGroups[[mm]]]
                     }
-                    heatscatter(x, y, log = "xy", main = paste("All", group1, "vs.", group2, names(object)[ii]),
+                    LSD::heatscatter(x, y, log = "xy", main = paste("All", group1, "vs.", group2, names(object)[ii]),
                                 xlab = group1, ylab = group2)
                     abline(0,1)
                 }
@@ -63,7 +75,34 @@ plotQC <- function(object, factorGroups, plotPath) {
     dev.off()
 }
 
-## The quality check function for GAMDataSet
+## plot histogram of counts
+#' @param object A \code{GenoGAMDataSet}
+#' @param plotPath The file to plot to
+#' @return Nothing. Saves plot in plotPath
+#' @noRd
+plotQC_hist <- function(object, plotPath) {
+    numVars <- ncol(object)
+    totalSums <- colSums(object)
+        
+    png(plotPath, height = 800, width = 1200)
+    par(mfrow = c(numVars, 1))
+    for(ii in 1:numVars) {
+        lab <- colnames(object)[ii]
+        prettyTotal <- format(totalSums[lab], big.mark = ",", scientific = FALSE)
+        hist(object[,ii], breaks = 100, xlab = lab,
+             main = paste0("Total counts in ", lab, ": ", prettyTotal))
+        abline(v = median(object[,ii]), col = "red", lwd = 2)
+        axis(side = 1, at = median(object[,ii]), col.axis = "red")
+    }
+    dev.off()
+}
+
+## The quality check function for GenoGAMDataSet
+#' @param ggd A \code{GenoGAMDataSet} object
+#' @param factorGroups A list representing the groups. Each element is a group containing
+#' the names of the samples belonging to it
+#' @return NULL. A plot is saved to given directory
+#' @noRd
 qcGenoGAMDataSet <- function(ggd, factorGroups = list()) {
 
     if(!requireNamespace("LSD", quietly = TRUE)) {
@@ -74,19 +113,59 @@ qcGenoGAMDataSet <- function(ggd, factorGroups = list()) {
     if(!dir.exists(qcPath)) {
         dir.create(qcPath)
     }
-    hscatterFile <- "qc_normalization.png"
 
+    ## generate file name
+    timestamp <- as.character(Sys.time())
+    timestamp <- gsub("-", "", timestamp)
+    timestamp <- gsub(":", "", timestamp)
+    timestamp <- gsub(" ", "_", timestamp)
+    hscatterFile <- paste0("qc_normalization_", timestamp, ".png")
+    densityFile <- paste0("qc_counts_", timestamp, ".png")
+
+    ## prepare count matrix
     countMat <- sum(ggd)[[1]]
     sf <- sizeFactors(ggd)
     countNorm <- t(t(countMat)/exp(sf))
     if(length(factorGroups) == 0) {
         factorGroups <- list(names(sf))
     }
-    plotQC(list(normalized = countNorm, raw = countMat), factorGroups,
+
+    plotQC_hist(countMat, plotPath = file.path(qcPath, densityFile))
+    
+    plotQC_GenoGAMDataSet(list(normalized = countNorm, raw = countMat), factorGroups,
            plotPath = file.path(qcPath, hscatterFile))
 }
 
-## Find largest common substring
+#' A function to quality check the data
+#'
+#' This function checks some data attributes in the given class.
+#' Check details for more information.
+#'
+#' @param object Any object for which this methods is implemented
+#' @param ... further parameters. See details.
+#' @return Based on the object provided, see details.
+#' @details So far this method is only implemented for the class \code{GenoGAMDataSet}.
+#' In this case some general metrics are printed and some plots are stored in the folder
+#' "qc", which will be created in the working directory.
+#'
+#' Additional parameters:
+#' factorGroups (for GenoGAMDataSet), which is used to specify factor groups for normalization plots.
+#' By default the groups will be identified automatically. See ?computeSizeFactors for parameter description.
+#'
+#' @author Georg Stricker \email{georg.stricker@@in.tum.de}
+#' @export
+qualityCheck <- function(object, ...) {
+    if(class(object) == "GenoGAMDataSet") {
+       res <- qcGenoGAMDataSet(object, ...)
+    }
+    return(res)
+}
+
+## Find largest common substring in names, based on common naming pattern for replicates
+## this does not work for all situations.
+#' @param x A character vector
+#' @return The common largest substring
+#' @noRd
 commonSubstring <- function(x) {
     res <- Biostrings::substr(x[1], start = 1, stop = lcprefix(x[1], x[length(x)]))
     if(res == "") {
@@ -96,6 +175,9 @@ commonSubstring <- function(x) {
 }
 
 ## guess factorGroups from design matrix
+#' @param design The design matrix as provided by colData(GenoGAMDataSet)
+#' @return A list of factor groups
+#' @noRd
 guessFactorGroups <- function(design) {
     designCols <- sapply(design, is.integer)
     groups <- unique(design[,designCols, drop = FALSE])

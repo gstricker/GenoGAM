@@ -15,9 +15,9 @@ chunksize <- bppk*50
 ov <- bppk*10
 
 ## read data
-if(is.null(functionName)) {
+if(functionName == "qualityCheck") {
     ggd <- GenoGAMDataSet("config.txt", chunkSize = chunksize, overhangSize = ov,
-                          design = ~ s(x) + s(x, by = tfiib), directory = dir, qc = FALSE)
+                          design = ~ s(x) + s(x, by = tfiib), directory = dir)
 }
 
 ## or load existing data (if a fit is needed)

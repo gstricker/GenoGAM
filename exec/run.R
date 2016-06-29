@@ -1,4 +1,7 @@
-functionName <- "computeRegionSignificance"
+## options so far:
+## computeRegionSignificance
+## qualityCheck
+functionName <- "qualityCheck"
 source("setup.R")
 source("../R/devel.R")
-source("test_files/test_computeRegionSignificance.R")
+source(file.path("test_files", paste0("test_", functionName, ".R")))
