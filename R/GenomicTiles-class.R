@@ -310,7 +310,7 @@ GenomicTiles <- function(assays, chunkSize = 1e4, overhangSize = 0, ...) {
     else {
         ir <- IRanges()
     }
-    coords <- GenomicRanges::GRanges(GenomeInfoDb::seqnames(gpCoords), ir)
+    coords <- GenomicRanges::GRanges(chroms, ir)
     return(coords)
 }
 
@@ -1010,8 +1010,10 @@ setMethod("subset", "GenomicTiles", function(x, ...) {
 
     se <- subsetByOverlaps(SummarizedExperiment(assay, rowRanges = rowRanges, colData = colData),
                            subject, ...)
-    tiles <- .makeTiles(settings)
     GenomeInfoDb::seqlevels(rowRanges(se), force = TRUE) <- GenomeInfoDb::seqlevelsInUse(rowRanges(se))
+    
+    settings$chromosomes <- slot(rowRanges(se), "pos_runs")
+    tiles <- .makeTiles(settings)
     GenomeInfoDb::seqlevels(tiles, force = TRUE) <- GenomeInfoDb::seqlevelsInUse(rowRanges(se))
     if(length(metadata(tiles)) > 0) {
         GenomeInfoDb::seqlevels(metadata(tiles)$chromosomes, force = TRUE) <- GenomeInfoDb::seqlevelsInUse(tiles)
