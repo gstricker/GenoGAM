@@ -58,6 +58,7 @@ Collate:
     'cv.R'
     'devel.R'
     'diffBinding.R'
+    'filter.R'
     'genogam.R'
     'helper.R'
     'qc.R'
