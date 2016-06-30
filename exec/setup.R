@@ -15,7 +15,7 @@ chunksize <- bppk*50
 ov <- bppk*10
 
 ## read data
-if(functionName == "qualityCheck" | functionName == "makeTiles") {
+if(functionName == "qualityCheck" | functionName == "makeTiles" | functionName == "filter") {
     ggd <- GenoGAMDataSet("config.txt", chunkSize = chunksize, overhangSize = ov,
                           design = ~ s(x) + s(x, by = tfiib), directory = dir)
 }

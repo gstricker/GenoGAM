@@ -72,7 +72,7 @@ plotQC_GenoGAMDataSet <- function(object, factorGroups, plotPath) {
             }
         }
     }
-    dev.off()
+    suppressMessages(dev.off())
 }
 
 ## plot histogram of counts
@@ -94,7 +94,7 @@ plotQC_hist <- function(object, plotPath) {
         abline(v = median(object[,ii]), col = "red", lwd = 2)
         axis(side = 1, at = median(object[,ii]), col.axis = "red")
     }
-    dev.off()
+    suppressMessages(dev.off())
 }
 
 ## The quality check function for GenoGAMDataSet
@@ -133,7 +133,9 @@ qcGenoGAMDataSet <- function(ggd, factorGroups = list()) {
     plotQC_hist(countMat, plotPath = file.path(qcPath, densityFile))
     
     plotQC_GenoGAMDataSet(list(normalized = countNorm, raw = countMat), factorGroups,
-           plotPath = file.path(qcPath, hscatterFile))
+                          plotPath = file.path(qcPath, hscatterFile))
+    message(paste0("Plots saved in\n", file.path(qcPath, densityFile), "\n",
+                  file.path(qcPath, hscatterFile)))
 }
 
 #' A function to quality check the data

@@ -15,6 +15,9 @@ mergeRanges <- function(ranges, overlap = 0) {
         subgr <- ranges[seqnames(ranges) == y,]
         distances <- start(subgr)[-1] - end(subgr)[-length(subgr)]
         ov <- which(distances <= overlap)
+        if(length(ov) == 0) {
+            return(subgr)
+        }
         mergedStarts <- setdiff(ov, ov + 1)
         mergedEnds <- setdiff(ov + 1, ov)
         
@@ -64,6 +67,7 @@ compute_filter <- function(ggd, threshold = NULL, windowsize = 201, mode = c("su
         sumsMedian <- median(sums)
         sumsMAD <- mad(sums)
         threshold <- sumsMedian + 3*sumsMAD
+        futile.logger::flog.info(paste("Threshold estimated at", threshold))
     }
 
     ## find ranges complying with the threshold
@@ -89,6 +93,7 @@ compute_filter <- function(ggd, threshold = NULL, windowsize = 201, mode = c("su
     start(gr[posRanges,]) <- start(gr[posRanges,]) - end(gr[posRanges,]) + seqlengths(ggd)[names(posRanges)]
     end(gr[posRanges,]) <- seqlengths(ggd)[names(posRanges)]
 
+    seqlevels(gr, force = TRUE) <- seqlevelsInUse(gr)
     res <- mergeRanges(gr, tileSize)
     return(res)
 }
@@ -107,8 +112,12 @@ compute_filter <- function(ggd, threshold = NULL, windowsize = 201, mode = c("su
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @noRd
 filter <- function(ggd, threshold = NULL, windowsize = 201, mode = c("sum", "mean")) {
-   
+
+    futile.logger::flog.info("Filtering dataset for enriched regions")
     mode <- match.arg(mode)
     res <- compute_filter(ggd, threshold, windowsize, mode)
+    prettyDrop <- format(nrow(ggd) - sum(width(res)), big.mark = ",", scientific = FALSE)
+    prettyLeft <- format(sum(width(res)), big.mark = ",", scientific = FALSE)
+    futile.logger::flog.info(paste("Done. A total of", prettyDrop, "positions were dropped,", prettyLeft, "are left."))
     return(ggd[res])
 }

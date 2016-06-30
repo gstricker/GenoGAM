@@ -467,6 +467,27 @@ setMethod("subsetByOverlaps", c("GenoGAMDataSet", "GRanges"),
               return(gtd)
           })
 
+#' Subsetting by GRanges
+#'
+#' Providing subsetting by GRanges through the single-bracket operator
+#'
+#' @param x A \code{GenoGAMDataSet} object
+#' @param i A \code{GRanges} object
+#' @return A subsetted \code{GenoGAMDataSet} object
+#' @rdname GenoGAMDataSet-brackets
+setMethod("[", c("GenoGAMDataSet", "GRanges"), function(x, i) {
+    settings <- getSettings(x)
+    design <- design(x)
+    sf <- sizeFactors(x)
+    subgt <- .exactSubsetByOverlaps(x, i)
+    settings <- setDefaults(settings, chromosomeList = GenomeInfoDb::seqlevels(subgt))
+              
+    gtd <- new("GenoGAMDataSet", subgt, settings = settings,
+               design = design, sizeFactors = sf)
+    return(gtd)
+})
+    
+
 ## Silent methods
 ## ==============
 setGeneric("getSettings", function(object) standardGeneric("getSettings"))

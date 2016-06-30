@@ -286,7 +286,8 @@ GenomicTiles <- function(assays, chunkSize = 1e4, overhangSize = 0, ...) {
     })
 
     tiles <- do.call("c", tileList)
-    seqlengths(tiles) <- sapply(seqlevels(tiles), function(y) max(end(tiles[seqnames(tiles) == y])))
+    seqlengths(tiles) <- seqlengths(l$chromosomes)
+    seqlevels(tiles, force = TRUE) <- seqlevelsInUse(tiles)
 
     ## add 'id' and 'dist' column and put settings in metadata
     mcols(tiles)$id <- 1:length(tiles)
@@ -295,15 +296,34 @@ GenomicTiles <- function(assays, chunkSize = 1e4, overhangSize = 0, ...) {
     return(tiles)
 }
 
+## #' A function to produce the row coordinates from GPos object.
+## #' 
+## #' @param gp A GPos object.
+## #' @return A GRanges object of the row coordinates.
+## .makeCoordinates <- function(gp) {
+##     gpCoords <- gp@pos_runs
+##     chroms <- seqlevels(gpCoords)
+##     if(length(gpCoords) > 0) {
+##         widths <- sapply(chroms, function(y) sum(width(gpCoords[seqnames(gpCoords) == y,])))
+##         ir <- IRanges(start = cumsum(c(1, widths[-length(widths)])),
+##                       end = cumsum(widths))
+##     }
+##     else {
+##         ir <- IRanges()
+##     }
+##     coords <- GenomicRanges::GRanges(chroms, ir)
+##     return(coords)
+## }
+
 #' A function to produce the row coordinates from GPos object.
 #' 
 #' @param gp A GPos object.
 #' @return A GRanges object of the row coordinates.
 .makeCoordinates <- function(gp) {
     gpCoords <- gp@pos_runs
-    chroms <- seqlevels(gpCoords)
+    chroms <- seqnames(gpCoords)
     if(length(gpCoords) > 0) {
-        widths <- sapply(chroms, function(y) sum(width(gpCoords[seqnames(gpCoords) == y,])))
+        widths <- width(gpCoords)
         ir <- IRanges(start = cumsum(c(1, widths[-length(widths)])),
                       end = cumsum(widths))
     }
@@ -311,6 +331,7 @@ GenomicTiles <- function(assays, chunkSize = 1e4, overhangSize = 0, ...) {
         ir <- IRanges()
     }
     coords <- GenomicRanges::GRanges(chroms, ir)
+    coords$block <- 1:length(coords)
     return(coords)
 }
 
@@ -491,17 +512,19 @@ setMethod("getIndexCoordinates", "GenomicTiles", function(object, id = NULL, ind
     if(is.null(index)) {
         index <- getIndex(object)
     }
-    chromosomes <- GenomeInfoDb::seqlevels(index)
     rowCoords <- getCoordinates(object)
+    gpCoords <- slot(rowRanges(object), "pos_runs")
     GenomeInfoDb::seqlengths(index) <- rep(NA, length(GenomeInfoDb::seqlengths(index)))
+    index$block <- subjectHits(findOverlaps(index, gpCoords))
     
-    for(chr in chromosomes) {
-        start <- min(start(index[GenomeInfoDb::seqnames(index) == chr]))
-        index[GenomeInfoDb::seqnames(index) == chr] <- shift(index[GenomeInfoDb::seqnames(index) == chr],
-                         start(rowCoords[GenomeInfoDb::seqnames(rowCoords) == chr]) - start)
+    for(bl in index$block) {
+        start <- min(start(index[index$block == bl,]))
+        index[index$block == bl,] <- shift(index[index$block == bl,],
+                         start(rowCoords[rowCoords$block == bl,]) - start)
     }
 
     if(!is.null(id)) index <- index[mcols(index)$id %in% id]
+    index$block <- NULL
     return(index)
 })
 
