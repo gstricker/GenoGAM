@@ -182,7 +182,7 @@
         }
     }
     
-    totalLen <- suppressWarnings(sum(elementLengths(res)))
+    totalLen <- suppressWarnings(sum(elementNROWS(res)))
     if(is.na(totalLen) | totalLen > 2^32) return(RleList(res, compress = FALSE))
     else return(RleList(res))
 }
