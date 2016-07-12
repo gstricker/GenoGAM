@@ -30,7 +30,7 @@ NULL
 #' @exportClass GenoGAM
 setClass("GenoGAM",
          slots = list(design = "formula", fits = "data.frame",
-             positions = "GPos", smooths = "data.frame",
+             positions = "GPos", smooths = "list",
              experimentDesign = "matrix", fitparams = "numeric",
              family = "ANY", cvparams = "numeric",
              settings = "GenoGAMSettings", tileSettings = "list"),
@@ -66,8 +66,8 @@ setClass("GenoGAM",
 }
 
 .validateSmoothsType <- function(object) {
-    if(class(slot(object, "smooths")) != "data.frame") {
-        return("'smooths' must be a data.frame object")
+    if(class(slot(object, "smooths")) != "list") {
+        return("'smooths' must be a list object")
     }
     NULL
 }
@@ -386,7 +386,7 @@ setMethod("view", "GenoGAM", function(object, ranges = NULL, seqnames = NULL,
 #'
 #' @param gg A fitted GenoGAM object.
 #' @param log.p Should pvalues be returned in log scale?
-#' @return A GenoGAm object which fits has been updated by the pvalue columns.
+#' @return A GenoGAM object which fits has been updated by the pvalue columns.
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @export
 computeSignificance <- function(gg, log.p = FALSE) {

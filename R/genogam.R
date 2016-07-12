@@ -150,14 +150,24 @@ genogam <- function(ggd, lambda = NULL, family = mgcv::nb(),
         require(GenoGAM, quietly = TRUE)
         df <- .meltGTile(list(data[[ii]]), colData(ggd), sizeFactors(ggd), formula)
         mod <- mgcv::gam(formula, df[[1]], family = family, sp = rep(lambda, nsplines))
-        fits <- .getFunctions(mod, df[[1]])
+        fits <- getFunctions(mod, df[[1]])
         rowindx <- (start(chunkIndex[ii,]):end(chunkIndex[ii,])) - (start(tileIndex[ii,]) - 1)
         fits <- fits[rowindx,]
-        return(fits)
+        smooths <- extractSplines(mod)
+        x <- df[[1]]$pos[rowindx]
+        pxsd <- partial_xsd(mod, x)
+        return(list(fits = fits, smooths = smooths, pxsd = pxsd))
     })
 
+    smooths <- list(chunkIndex = getChunkIndex(ggd),
+                    splines = data.frame())
+    smooths$splines <- lapply(res, function(y) y$smooths)
+    names(smooths$splines) <- tileIndex$id
+    pxsd <- lapply(res, function(y) y$pxsd)
+    fits <- lapply(res, function(y) y$fits)
+
     ##combine
-    res <- data.table::rbindlist(res)
+    fits <- data.table::rbindlist(fits)
 
     ## create GenoGAM object
     fitparams <- c(lambda = unname(lambda), theta = unname(family$getTheta(trans = TRUE)),
@@ -165,8 +175,8 @@ genogam <- function(ggd, lambda = NULL, family = mgcv::nb(),
     cvparams <- c(kfolds = kfolds, ncv = ncv, size = intervallSize, cv = cv)
     tempFormula <- gsub("pos", "x", formula)
     saveFormula <- as.formula(paste(tempFormula[2], tempFormula[1], tempFormula[3]))
-    genogamObject <- .GenoGAM(design = saveFormula, fits = res,
-                              positions = rowRanges(ggd),
+    genogamObject <- .GenoGAM(design = saveFormula, fits = fits,
+                              positions = rowRanges(ggd), smooths = smooths,
                               experimentDesign = as.matrix(colData(ggd)[,na.omit(vars), drop = FALSE]),
                               fitparams = fitparams, family = family,
                               cvparams = cvparams, settings = settings,
@@ -184,7 +194,8 @@ genogam <- function(ggd, lambda = NULL, family = mgcv::nb(),
 #' @param m The penalization order of the P-splines.
 #' @return A data.table of all the splines and derivatives.
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
-.getFunctions <- function(mod, data) {
+#' @noRd
+getFunctions <- function(mod, data) {
     ## some constants
     samplenames <- unique(data$ID)
     vars <- .getVars(mod$formula)[-1]
@@ -199,7 +210,7 @@ genogam <- function(ggd, lambda = NULL, family = mgcv::nb(),
     nameslist <- c(colnames(pred$fit), paste("se", colnames(pred$se.fit), sep = "."))
     data.table::setnames(res, names(res), nameslist)    
 
-            ## insert prediction values
+    ## insert prediction values
     for(ii in 1:num_var) {
         if(ii == 1) intercept <- coefficients(mod)[1]
         else intercept <- 0
@@ -231,10 +242,11 @@ genogam <- function(ggd, lambda = NULL, family = mgcv::nb(),
 #' @param derivative The order of derivative
 #' @return A matrix with dimensions length(x) * length(k)
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
-.bspline <- function(x, k, m = 2, derivative = 0) {
+#' @noRd
+bspline <- function(x, k, m = 2, derivative = 0) {
     res <- splines::spline.des(k, x, m + 2, rep(derivative,length(x)))$design
     return(res)
-}
+}    
 
 #' Extract splines from model.
 #'
@@ -243,7 +255,8 @@ genogam <- function(ggd, lambda = NULL, family = mgcv::nb(),
 #' @param mod A gam model object
 #' @return A data.table of spline parameters
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
-.extractSplines <- function(mod){
+#' @noRd
+extractSplines <- function(mod){
 
     num_var <- length(mod$smooth)
     res <- NULL
@@ -259,6 +272,7 @@ genogam <- function(ggd, lambda = NULL, family = mgcv::nb(),
             nConstraints <- attr(smooth, "nCons")
             coefs <- all_coef[first:last]
             name <- smooth$label
+            name <- gsub("pos", "x", name)
         }
 
         if (nConstraints > 0) {

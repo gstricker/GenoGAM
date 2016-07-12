@@ -42,6 +42,7 @@ Suggests:
     BiocStyle,
     chipseq (>= 1.21.2),
     LSD (>= 3.0.0),
+    genefilter (>= 1.54.2),
     testthat,
     knitr
 VignetteBuilder: knitr
@@ -61,6 +62,7 @@ Collate:
     'filter.R'
     'genogam.R'
     'helper.R'
+    'peakCalling_old.R'
     'qc.R'
     'readData.R'
     'sf.R'
