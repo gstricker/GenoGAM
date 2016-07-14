@@ -62,7 +62,7 @@ Collate:
     'filter.R'
     'genogam.R'
     'helper.R'
-    'peakCalling_old.R'
+    'peakCalling.R'
     'qc.R'
     'readData.R'
     'sf.R'

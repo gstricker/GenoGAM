@@ -154,16 +154,18 @@ genogam <- function(ggd, lambda = NULL, family = mgcv::nb(),
         rowindx <- (start(chunkIndex[ii,]):end(chunkIndex[ii,])) - (start(tileIndex[ii,]) - 1)
         fits <- fits[rowindx,]
         smooths <- extractSplines(mod)
-        x <- df[[1]]$pos[rowindx]
-        pxsd <- partial_xsd(mod, x)
-        return(list(fits = fits, smooths = smooths, pxsd = pxsd))
+        vcov <- mgcv::vcov.gam(mod)
+        colnames(vcov) <- na.omit(smooths)$smooth
+        rownames(vcov) <- na.omit(smooths)$smooth
+        return(list(fits = fits, smooths = smooths, vcov = vcov))
     })
 
     smooths <- list(chunkIndex = getChunkIndex(ggd),
-                    splines = data.frame())
+                    splines = list())
     smooths$splines <- lapply(res, function(y) y$smooths)
     names(smooths$splines) <- tileIndex$id
-    pxsd <- lapply(res, function(y) y$pxsd)
+    vcov <- lapply(res, function(y) y$vcov)
+    names(vcov) <- tileIndex$id
     fits <- lapply(res, function(y) y$fits)
 
     ##combine
@@ -176,7 +178,7 @@ genogam <- function(ggd, lambda = NULL, family = mgcv::nb(),
     tempFormula <- gsub("pos", "x", formula)
     saveFormula <- as.formula(paste(tempFormula[2], tempFormula[1], tempFormula[3]))
     genogamObject <- .GenoGAM(design = saveFormula, fits = fits,
-                              positions = rowRanges(ggd), smooths = smooths,
+                              positions = rowRanges(ggd), smooths = smooths, vcov = vcov,
                               experimentDesign = as.matrix(colData(ggd)[,na.omit(vars), drop = FALSE]),
                               fitparams = fitparams, family = family,
                               cvparams = cvparams, settings = settings,

@@ -30,12 +30,12 @@ NULL
 #' @exportClass GenoGAM
 setClass("GenoGAM",
          slots = list(design = "formula", fits = "data.frame",
-             positions = "GPos", smooths = "list",
+             positions = "GPos", smooths = "list", vcov = "list",
              experimentDesign = "matrix", fitparams = "numeric",
              family = "ANY", cvparams = "numeric",
              settings = "GenoGAMSettings", tileSettings = "list"),
          prototype = prototype(design = ~ 1, fits = data.frame(),
-             positions = GPos(), smooths = data.frame(),
+             positions = GPos(), smooths = list(), vcov = list(),
              experimentDesign = matrix(), fitparams = numeric(), family = mgcv::nb(),
              cvparams = numeric(), settings = GenoGAMSettings(),
              tileSettings = list()))
@@ -68,6 +68,13 @@ setClass("GenoGAM",
 .validateSmoothsType <- function(object) {
     if(class(slot(object, "smooths")) != "list") {
         return("'smooths' must be a list object")
+    }
+    NULL
+}
+
+.validateVCovType <- function(object) {
+    if(class(slot(object, "vcov")) != "list") {
+        return("'vcov' must be a list object")
     }
     NULL
 }
@@ -113,7 +120,7 @@ setClass("GenoGAM",
       .validatePositionsType(object), .validateSmoothsType(object),
       .validateExpDesignType(object), .validateFitParamsType(object),
       .validateCVParamsType(object), .validateSettingsType(object),
-      .validateTileSettingsType(object))
+      .validateTileSettingsType(object), .validateVCovType(object))
 }
 
 setValidity2("GenoGAM", .validateGenoGAM)

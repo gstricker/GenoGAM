@@ -12,7 +12,7 @@ computeSignificance(gg, log.p = FALSE)
 \item{log.p}{Should pvalues be returned in log scale?}
 }
 \value{
-A GenoGAm object which fits has been updated by the pvalue columns.
+A GenoGAM object which fits has been updated by the pvalue columns.
 }
 \description{
 Based on the model fits this functions computes pointwise pvalues.

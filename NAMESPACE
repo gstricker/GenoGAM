@@ -2,6 +2,7 @@
 
 export(GenoGAMDataSet)
 export(GenomicTiles)
+export(callPeaks)
 export(changeSettings)
 export(checkSettings)
 export(computeRegionSignificance)
