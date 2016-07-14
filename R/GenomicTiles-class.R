@@ -517,7 +517,7 @@ setMethod("getIndexCoordinates", "GenomicTiles", function(object, id = NULL, ind
     GenomeInfoDb::seqlengths(index) <- rep(NA, length(GenomeInfoDb::seqlengths(index)))
     index$block <- subjectHits(findOverlaps(index, gpCoords))
     
-    for(bl in index$block) {
+    for(bl in unique(index$block)) {
         start <- min(start(index[index$block == bl,]))
         index[index$block == bl,] <- shift(index[index$block == bl,],
                          start(rowCoords[rowCoords$block == bl,]) - start)
