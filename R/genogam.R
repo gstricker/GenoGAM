@@ -124,7 +124,7 @@ genogam <- function(ggd, lambda = NULL, family = mgcv::nb(),
         ## get the tile ids for CV
         sumMatrix <- sum(ggd)
         if(ncv >= 20) {
-            pvals <- suppressMessages(suppressWarnings(.deseq(sumMatrix[[1]], sizeFactors(ggd))))
+            pvals <- suppressMessages(suppressWarnings(.deseq(sumMatrix[[1]], names(sizeFactors(ggd)))))
             ids <- order(pvals)[1:ncv]
         }
         else ids <- 1:length(data)
