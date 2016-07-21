@@ -249,7 +249,8 @@ setMethod("summary", "GenoGAM", function(object) {
 makeTestGenoGAM <- function() {
     gg <- .GenoGAM()
     gp <- GenomicRanges::GPos(GenomicRanges::GRanges("chrI", IRanges::IRanges(1, 100)))
-    fits <- data.frame("s(x)" = runif(100), "s(x):type" = runif(100))
+    fits <- data.frame(runif(100), runif(100), runif(100), runif(100))
+    names(fits) <- c("s(x)", "s(x)::type", "se.s(x)", "se.s(x)::type")
     slot(gg, "positions") <- gp
     slot(gg, "fits") <- fits
     return(gg)

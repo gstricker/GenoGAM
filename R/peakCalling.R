@@ -67,8 +67,8 @@ callPeaks <- function(fit, smooth = NULL, range = NULL, peakType = c("narrow", "
     ## find row index by overlaps and subset position vector
     iid <- queryHits(findOverlaps(index, fit@positions[xid]))
     x <- data.table::data.table(seqnames = as.factor(seqnames(fit@positions)[xid]),
-                    pos = pos(fit@positions)[xid], id = iid)
-
+                                pos = pos(fit@positions)[xid], id = iid)
+    
     if(peakType == "narrow") {
         futile.logger::flog.info("Calling narrow peaks")
         npeaks <- getExtremes(x, splines, smooth, border)
@@ -81,7 +81,7 @@ callPeaks <- function(fit, smooth = NULL, range = NULL, peakType = c("narrow", "
         peaks <- computeBroadPeakSignificance(fit, bpeaks, smooth)
         peaks <- peaks[width >= minregion,]
     }
-
+    
     if(thresholdType == "pvalue") {        
         signif <- peaks[score >= -log(threshold),]
         signif <- signif[order(score, decreasing = TRUE),]
@@ -91,6 +91,72 @@ callPeaks <- function(fit, smooth = NULL, range = NULL, peakType = c("narrow", "
         signif <- signif[order(fdr),]
     }
     return(signif)
+}
+
+#' Get extreme points on a piecewise polynomial function for a single tile
+#' This is a function to be applied over in getExtremes. For parameters
+#' see getExtremes
+#' @noRd
+computeTileExtremes <- function(ii, x, splines, smooth, what, useIntercept) {
+    intercept <- 0
+    
+    subx <- data.table::copy(x[id == ii, pos])
+    chrom <- data.table::copy(x[id == ii, seqnames])
+    sp <- splines[[as.character(ii)]][splines[[as.character(ii)]]$smooth == smooth,]
+    if(useIntercept) {
+        intercept <- attr(splines[[as.character(ii)]], "intercept")
+    }
+    
+    ## compute basis
+    basis <- bspline(subx, sp$knots)
+    basis_prime <- bspline(subx, sp$knots, derivative = 1)
+    basis_pprime <- bspline(subx, sp$knots, derivative = 2)
+    
+    ## compute splines
+    spline <- computeSpline(basis, na.omit(sp$coefs), intercept = intercept)
+    spline_prime <- computeSpline(basis_prime, na.omit(sp$coefs), intercept = intercept)
+    spline_pprime <- computeSpline(basis_pprime, na.omit(sp$coefs), intercept = intercept)
+    
+    ## find roots
+    f_prime <- cbind(subx, spline_prime)
+    f_pprime <- cbind(subx, spline_pprime)
+    roots_prime <- find_root(f_prime)
+    roots_pprime <- find_root(f_pprime)
+    
+    ## classify
+    bool_indx <- ((f_pprime[,1] %in% round(roots_prime)) & (f_pprime[,2] < 0))
+    if(sum(bool_indx) == 0) {
+        extMax <- data.table::data.table(seqnames = factor(), position = integer(), summit = numeric(), type = factor())
+    }
+    else {
+        extMax <- data.table::data.table(seqnames = chrom[bool_indx], position = subx[bool_indx],
+                                         summit = exp(spline[bool_indx]), type = "max")
+    }
+    
+    bool_indx <- ((f_pprime[,1] %in% round(roots_prime)) & (f_pprime[,2] > 0))
+    if(sum(bool_indx) == 0) {
+        extMin <- data.table::data.table(seqnames = factor(), position = integer(), summit = numeric(), type = factor())
+    }
+    else {
+        extMin <- data.table::data.table(seqnames = chrom[bool_indx], position = subx[bool_indx],
+                                         summit = exp(spline[bool_indx]), type = "min")
+    }
+    ext <- rbind(extMax,extMin)
+    
+    if (what == "all") {
+        bool_indx <- ((f_pprime[,1] %in% round(roots_pprime)))
+        if(sum(bool_indx) == 0) {
+            extInf <- data.table::data.table(seqnames = factor(), position = integer(), summit = numeric(), type = factor())
+        }
+        else {
+            extInf <- data.table::data.table(seqnames = chrom[bool_indx], position = subx[bool_indx],
+                                             summit = exp(spline[bool_indx]), type = "inflection")
+        }
+        ext <- rbind(ext, extInf)
+    }
+    rm(list = c("subx", "chrom", "sp", "basis", "basis_prime", "basis_pprime", "spline", "spline_prime",
+                "spline_pprime", "f_prime", "f_pprime", "roots_prime", "roots_pprime", "bool_indx", "extMin", "extMax"))
+    return(ext)
 }
 
 #' Get extreme points on a piecewise polynomial function.
@@ -109,36 +175,41 @@ getExtremes <- function(x, splines, smooth, border = c("min", "inflection")) {
     what <- switch(border,
                    min = "root",
                    inflection = "all")
-
+    
     intercept <- 0
+    useIntercept <- FALSE
+    if(smooth == "s(x)") {
+        useIntercept <- TRUE
+    }
+    
     ids <- unique(x$id)
     
     res <- BiocParallel::bplapply(ids, function(ii) {
         require(GenoGAM, quietly = TRUE)
         
-        subx <- x[x$id == ii, pos]
-        chrom <- x[x$id == ii, seqnames]
+        subx <- data.table::copy(x[id == ii, pos])
+        chrom <- data.table::copy(x[id == ii, seqnames])
         sp <- splines[[as.character(ii)]][splines[[as.character(ii)]]$smooth == smooth,]
-        if(smooth == "s(x)") {
+        if(useIntercept) {
             intercept <- attr(splines[[as.character(ii)]], "intercept")
         }
-
+        
         ## compute basis
         basis <- bspline(subx, sp$knots)
         basis_prime <- bspline(subx, sp$knots, derivative = 1)
         basis_pprime <- bspline(subx, sp$knots, derivative = 2)
-
+        
         ## compute splines
         spline <- computeSpline(basis, na.omit(sp$coefs), intercept = intercept)
         spline_prime <- computeSpline(basis_prime, na.omit(sp$coefs), intercept = intercept)
         spline_pprime <- computeSpline(basis_pprime, na.omit(sp$coefs), intercept = intercept)
-
+        
         ## find roots
         f_prime <- cbind(subx, spline_prime)
         f_pprime <- cbind(subx, spline_pprime)
         roots_prime <- find_root(f_prime)
         roots_pprime <- find_root(f_pprime)
-
+        
         ## classify
         bool_indx <- ((f_pprime[,1] %in% round(roots_prime)) & (f_pprime[,2] < 0))
         if(sum(bool_indx) == 0) {
@@ -148,7 +219,7 @@ getExtremes <- function(x, splines, smooth, border = c("min", "inflection")) {
             extMax <- data.table::data.table(seqnames = chrom[bool_indx], position = subx[bool_indx],
                                              summit = exp(spline[bool_indx]), type = "max")
         }
-
+        
         bool_indx <- ((f_pprime[,1] %in% round(roots_prime)) & (f_pprime[,2] > 0))
         if(sum(bool_indx) == 0) {
             extMin <- data.table::data.table(seqnames = factor(), position = integer(), summit = numeric(), type = factor())
@@ -157,9 +228,8 @@ getExtremes <- function(x, splines, smooth, border = c("min", "inflection")) {
             extMin <- data.table::data.table(seqnames = chrom[bool_indx], position = subx[bool_indx],
                                              summit = exp(spline[bool_indx]), type = "min")
         }
-
         ext <- rbind(extMax,extMin)
-
+        
         if (what == "all") {
             bool_indx <- ((f_pprime[,1] %in% round(roots_pprime)))
             if(sum(bool_indx) == 0) {
@@ -172,11 +242,11 @@ getExtremes <- function(x, splines, smooth, border = c("min", "inflection")) {
             ext <- rbind(ext, extInf)
         }
         return(ext)
-    }) 
-
+    })
+    
     res <- data.table::rbindlist(res)
     res$type <- as.factor(res$type)
-    res <- res[order(res$position),]
+    res <- res[order(position),]
     attr(res, "smooth") <- smooth
     return(res)  
 }
@@ -204,7 +274,7 @@ computeSpline <- function(base, coefs, intercept = 0) {
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @noRd
 find_root <- function(f) {
-
+    
     f_binary <- f[,2] > 0
     dif <- as.logical(abs(diff(f_binary,1)))
     return (f[c(FALSE,dif),1])
@@ -220,11 +290,11 @@ find_root <- function(f) {
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @noRd
 computeZscore <- function(fit, index, smooth) {
-
+    
     se_smooth <- paste("se", smooth, sep = ".")
     all <- slot(fit, "fits")[,smooth]
     se_all <- slot(fit, "fits")[,se_smooth]
-
+    
     isInstalled <- require(genefilter, quietly = TRUE)
     if(isInstalled) {
         mu0 <- genefilter::shorth(all, na.rm=TRUE)
@@ -233,12 +303,12 @@ computeZscore <- function(fit, index, smooth) {
         futile.logger::flog.info("'genefilter' package not installed. Using 'median' to estimate signal average")
         mu0 <- median(all, na.rm=TRUE)
     }
-
+    
     left <- all[all <= mu0]
     right <- abs(left - mu0) + mu0
     new_data <- c(left, right)
     var0 <- mad(new_data, na.rm = TRUE)^2
-
+    
     res <- data.table::data.table(seqnames = as.factor(seqnames(slot(fit, "positions")[index,])),
                       pos = pos(slot(fit, "positions")[index,]),
                       zscore = (all[index] - mu0)/(sqrt(se_all[index]^2 + var0)))
@@ -262,7 +332,7 @@ callBroadPeaks <- function(zscore, maxgap, cutoff) {
     signifPos <- zscore[pval >= -log(cutoff), pos]
     diffs <- abs(diff(signifPos))
     breaks <- which(diffs > maxgap)
-
+    
     starts <- c(signifPos[1], signifPos[breaks + 1])
     ends <- c(signifPos[breaks], signifPos[length(signifPos)])
     chroms <- c(as.character(zscore[breaks, seqnames]), as.character(zscore[pos == ends[length(ends)], seqnames]))
@@ -288,9 +358,9 @@ computePeakSignificance <- function(fit, peaks, x) {
     z <- computeZscore(fit, xid, attr(peaks, "smooth"))
     smooth <- attr(peaks, "smooth")
     peaks$zscore <- z$zscore
-
-    p <- peaks[type == "max",]
-    v <- peaks[type == "min",]
+    
+    p <- data.table::copy(peaks[type == "max",])
+    v <- data.table::copy(peaks[type == "min",])
     v$zscore <- -v$zscore
     p <- p[order(zscore, decreasing = TRUE),]
     v <- v[order(zscore, decreasing = TRUE),]
@@ -321,31 +391,31 @@ parsePeaks <- function(peakDF, x) {
         peaks$type <- NULL
         return(peaks)
     }
-
+    
     if("inflection" %in% levels(peakDF$type)) {
         peakDF <- peakDF[type != "min",]
     }
-
+    
     res <- lapply(levels(peakDF$seqnames), function(y) {
-        subpeaks <- peakDF[seqnames == y,]
+        subpeaks <- data.table::copy(peakDF[seqnames == y,])
         orderedPos <- subpeaks[order(position),]
         indx <- which(orderedPos$type == "max")
         peaks <- orderedPos[indx,]
-
+        
         if(orderedPos$type[1] == "max") {
             peaks$start <- c(min(x[seqnames == y, pos], na.rm = TRUE), orderedPos[indx[-1] - 1, position])
         }
         else {
             peaks$start <- orderedPos[indx - 1, position]
         }
-
+        
         if(orderedPos$type[nrow(orderedPos)] == "max") {
             peaks$end <- c(orderedPos[indx[-(length(indx))] + 1, position], min(x[seqnames == y, pos], na.rm = TRUE))
         }
         else {
             peaks$end <- orderedPos[indx + 1, position]
         }
-
+        
         peaks$type <- NULL
         return(peaks)
     })
@@ -368,22 +438,34 @@ xsd <- function(fit, peaks) {
     v <- slot(fit, "vcov")
     peaks$peakLeft <- 0
     peaks$peakRight <- 0
+    gr <- GRanges(peaks$seqnames, IRanges(start = peaks$position, end = peaks$position))
+    id <- subjectHits(findOverlaps(gr, index))
+    peaks$id <- id
+    peaks <- peaks[order(id),]
     
-    res <- sapply(1:nrow(peaks), function(ii) {
-        p <- peaks[ii]
-        ir <- IRanges(p$position, p$position)
-        id <- queryHits(findOverlaps(ranges(index), ir))
-        params <- splines[[as.character(id)]]
+    res <- sapply(unique(peaks$id), function(ii) {
+        p <- peaks[id == ii, position]
+        params <- splines[[as.character(ii)]]
         k <- params[params$smooth == smooth, "knots"]
         coefs <- na.omit(params[params$smooth == smooth, "coefs"])
-        bsprime <- bspline(p$position, k, derivative = 1)
-        f2 <- bspline(p$position, k, derivative = 2) %*% coefs
-        subv <- v[[as.character(id)]]
-        betav <- subv[rownames(subv) == smooth, colnames(subv) == smooth]
-        xvar <- as.numeric((bsprime %*% betav %*% t(bsprime))/f2^2)
+        bsprime <- bspline(p, k, derivative = 1)
+        f2 <- bspline(p, k, derivative = 2) %*% coefs
+        n <- length(v[[as.character(ii)]])
+        
+        ## from vector representing the upper triangular vcov matrix
+        ## to the full symmetric matrix
+        solve_n <- (sqrt(1 + 4*n*2) - 1)/2 ## re-arranged midnight formula to get dimensions of symmetric matrix
+        subv <- diag(solve_n)
+        subv[upper.tri(subv, diag = TRUE)] <- v[[as.character(ii)]]
+        subv <- subv + t(subv) - diag(diag(subv))
+        indx <- which(attr(v[[as.character(ii)]], "smooths") == smooth)
+        
+        betav <- subv[indx, indx]
+        xvar <- diag(bsprime %*% betav %*% t(bsprime))/f2^2
         return(xvar)
     })
     
+    res <- unlist(res)
     peaks$peakLeft <- peaks$position - 1.96 * sqrt(res)
     peaks$peakRight <- peaks$position + 1.96 * sqrt(res)
     peaks$peakLeft[which(peaks$peakLeft < 1)] <- 1

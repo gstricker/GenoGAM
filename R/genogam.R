@@ -155,8 +155,9 @@ genogam <- function(ggd, lambda = NULL, family = mgcv::nb(),
         fits <- fits[rowindx,]
         smooths <- extractSplines(mod)
         vcov <- mgcv::vcov.gam(mod)
-        colnames(vcov) <- na.omit(smooths)$smooth
-        rownames(vcov) <- na.omit(smooths)$smooth
+        upperTri_vcov <- upper.tri(vcov, diag = TRUE)
+        vcov <- vcov[upperTri_vcov]
+        attr(vcov, "smooths") <- na.omit(smooths)$smooth
         return(list(fits = fits, smooths = smooths, vcov = vcov))
     })
 

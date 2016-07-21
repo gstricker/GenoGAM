@@ -266,9 +266,14 @@ GenomicTiles <- function(assays, chunkSize = 1e4, overhangSize = 0, ...) {
         starts <- start(y) + seq(0, nchunks - 1) * l$chunkSize
         ends <- c(start(y) + seq(1, nchunks - 1) * l$chunkSize - 1, end(y))
         chunks <- GenomicRanges::GRanges(seqnames = seqnames(y), IRanges(starts, ends))
-        chunks <- suppressWarnings(IRanges::shift(chunks, round(width(chunks)/2)))
-        tiles <- suppressWarnings(trim(flank(chunks, round(l$tileSize/2),
-                                             both = TRUE)))
+        if(l$tileSize == l$chunkSize) {
+            tiles <- chunks
+        }
+        else {
+            chunks <- suppressWarnings(IRanges::shift(chunks, round(width(chunks)/2)))
+            tiles <- suppressWarnings(trim(flank(chunks, round(l$tileSize/2),
+                                                 both = TRUE)))
+        }
 
         ## adjust first tile
         startsToResize <- which(start(tiles) < start(y))
@@ -344,7 +349,7 @@ GenomicTiles <- function(assays, chunkSize = 1e4, overhangSize = 0, ...) {
 makeTestGenomicTiles <- function() {
     gp <- GenomicRanges::GPos(GenomicRanges::GRanges(c("chrI", "chrII"), IRanges::IRanges(c(1,1), c(50,50))))
     df <- DataFrame(a = 1:100, b = 101:200)
-    gt2 <- GenomicTiles(assays = list(df), chunkSize = 15, rowRanges = gp)
+    gt2 <- GenomicTiles(assays = list(df), chunkSize = 15, rowRanges = gp, overhangSize = 2)
     return(gt2)
 }
 
@@ -404,8 +409,8 @@ setMethod("getChunkIndex", "GenomicTiles", function(object, id = NULL) {
     splitIndx <- split(indx, GenomeInfoDb::seqnames(indx))
     
     chunkIndex <- lapply(splitIndx, function(y) {
-        start <- c(start(y[1]), (end(y[-length(y)]) + start(y[-1]))/2)
-        end <- c((end(y[-length(y)]) + start(y[-1]))/2 - 1, end(y[length(y)]))
+        start <- c(start(y[1]), ceiling((end(y[-length(y)]) + start(y[-1]))/2))
+        end <- c(ceiling((end(y[-length(y)]) + start(y[-1]))/2 - 1), end(y[length(y)]))
         start(y) <- start
         end(y) <- end
         return(y)
@@ -1187,7 +1192,7 @@ setMethod("subsetByOverlaps", c("GenomicTiles", "GRanges"),
                        pos >= start(range) & pos <= end(range))
 
     df <- DataFrame(gtSubset)
-    names(df)[1] <- "chromosome"
+    ##names(df)[1] <- "chromosome"
     ## df <- melt(df, measure.vars = rownames(colData(gtSubset)), variable.name = "sample")
     return(DataFrameList(df))
 }
