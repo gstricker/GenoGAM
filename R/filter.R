@@ -111,7 +111,7 @@ compute_filter <- function(ggd, threshold = NULL, windowsize = 201, mode = c("su
 #' @return A |code{GenoGAMDataSet} object containing the filtered regions
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @export
-filter <- function(ggd, threshold = NULL, windowsize = 201, mode = c("sum", "mean")) {
+filterData <- function(ggd, threshold = NULL, windowsize = 201, mode = c("sum", "mean")) {
 
     futile.logger::flog.info("Filtering dataset for enriched regions")
     mode <- match.arg(mode)

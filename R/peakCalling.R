@@ -308,10 +308,11 @@ computeZscore <- function(fit, index, smooth) {
     right <- abs(left - mu0) + mu0
     new_data <- c(left, right)
     var0 <- mad(new_data, na.rm = TRUE)^2
-    
+    zscore <- (all[index] - mu0)/(sqrt(se_all[index]^2 + var0))
+        
     res <- data.table::data.table(seqnames = as.factor(seqnames(slot(fit, "positions")[index,])),
                       pos = pos(slot(fit, "positions")[index,]),
-                      zscore = (all[index] - mu0)/(sqrt(se_all[index]^2 + var0)))
+                      zscore = zscore)
     res$pval <- -pnorm(-res$zscore, log.p = TRUE)
     return(res)
 }
@@ -354,20 +355,24 @@ callBroadPeaks <- function(zscore, maxgap, cutoff) {
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @noRd
 computePeakSignificance <- function(fit, peaks, x) {
-    xid <- match(peaks$position, pos(slot(fit, "positions")))
-    z <- computeZscore(fit, xid, attr(peaks, "smooth"))
     smooth <- attr(peaks, "smooth")
+
+    gr <- GRanges(peaks$seqnames, IRanges(peaks$position, peaks$position))
+    ov <- findOverlaps(gr, slot(fit, "positions"))
+    xid <- subjectHits(ov)
+    z <- computeZscore(fit, xid, smooth)
     peaks$zscore <- z$zscore
     
     p <- data.table::copy(peaks[type == "max",])
     v <- data.table::copy(peaks[type == "min",])
-    v$zscore <- -v$zscore
     p <- p[order(zscore, decreasing = TRUE),]
+    v$zscore <- -v$zscore
     v <- v[order(zscore, decreasing = TRUE),]
     fdr <- sapply(p$zscore, function(y) {
-        sum(v$zscore >= y)/(sum(v$zscore >= y) + sum(p$zscore >= y))
+        sum(v$zscore >= y)/sum(p$zscore >= y)
     })
     fdr[is.nan(fdr)] <- 0
+    fdr <- fdr*(nrow(p)/nrow(v)) ## correct for different size of valleys and peaks to avoid FDR > 1
     peaks <- parsePeaks(peaks, x)
     peaks$score <- -pnorm(-peaks$zscore, log.p = TRUE)
     peaks$fdr <- fdr
