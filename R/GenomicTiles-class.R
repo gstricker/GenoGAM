@@ -403,10 +403,14 @@ setGeneric("getChunkIndex", function(object, ...) standardGeneric("getChunkIndex
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @export
 setMethod("getChunkIndex", "GenomicTiles", function(object, id = NULL) {
-    indx <- getIndex(object)
-    if(length(indx) == 0) return(indx)
+    index <- getIndex(object)
+    if(length(index) == 0) return(index)
+    rowCoords <- getCoordinates(object)
+    gpCoords <- slot(rowRanges(object), "pos_runs")
+    GenomeInfoDb::seqlengths(index) <- rep(NA, length(GenomeInfoDb::seqlengths(index)))
+    index$block <- subjectHits(findOverlaps(index, gpCoords))
     
-    splitIndx <- split(indx, GenomeInfoDb::seqnames(indx))
+    splitIndx <- split(index, index$block)
     
     chunkIndex <- lapply(splitIndx, function(y) {
         start <- c(start(y[1]), ceiling((end(y[-length(y)]) + start(y[-1]))/2))
@@ -417,7 +421,8 @@ setMethod("getChunkIndex", "GenomicTiles", function(object, id = NULL) {
     })
 
     res <- do.call(c, unname(chunkIndex))
-    metadata(res) <- metadata(indx)
+    res$block <- NULL
+    metadata(res) <- metadata(index)
 
     if(!is.null(id)) res <- res[mcols(res)$id %in% id]
     return(res)
@@ -521,16 +526,20 @@ setMethod("getIndexCoordinates", "GenomicTiles", function(object, id = NULL, ind
     gpCoords <- slot(rowRanges(object), "pos_runs")
     GenomeInfoDb::seqlengths(index) <- rep(NA, length(GenomeInfoDb::seqlengths(index)))
     index$block <- subjectHits(findOverlaps(index, gpCoords))
-    
-    for(bl in unique(index$block)) {
-        start <- min(start(index[index$block == bl,]))
-        index[index$block == bl,] <- shift(index[index$block == bl,],
-                         start(rowCoords[rowCoords$block == bl,]) - start)
-    }
 
-    if(!is.null(id)) index <- index[mcols(index)$id %in% id]
-    index$block <- NULL
-    return(index)
+    splitIndx <- split(index, index$block)
+
+    coords <- lapply(1:length(splitIndx), function(y) {
+        temp <- splitIndx[[y]]
+        start <- min(start(temp))
+        temp <- shift(temp, start(rowCoords[rowCoords$block == y,]) - start)
+        return(temp)
+    })
+
+    res <- do.call(c, unname(coords))
+    if(!is.null(id)) res <- index[mcols(res)$id %in% id]
+    res$block <- NULL
+    return(res)
 })
 
 #' @rdname dataRange
@@ -937,6 +946,7 @@ setMethod("as.data.frame", "GenomicTiles", function(x) {
     l$chromosomes <- gpCoords
     
     indx <- .makeTiles(l)
+    coords <- .makeCoordinates(GPos(coords))
     GenomeInfoDb::seqinfo(indx) <- GenomeInfoDb::seqinfo(gpCoords)
     GenomeInfoDb::seqlevels(coords) <- GenomeInfoDb::seqlevels(coords)[GenomeInfoDb::seqlevels(coords) %in%
                                            unique(GenomeInfoDb::seqnames(coords))]

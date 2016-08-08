@@ -118,6 +118,7 @@ filterData <- function(ggd, threshold = NULL, windowsize = 201, mode = c("sum", 
     res <- compute_filter(ggd, threshold, windowsize, mode)
     prettyDrop <- format(nrow(ggd) - sum(width(res)), big.mark = ",", scientific = FALSE)
     prettyLeft <- format(sum(width(res)), big.mark = ",", scientific = FALSE)
-    futile.logger::flog.info(paste("Done. A total of", prettyDrop, "positions were dropped,", prettyLeft, "are left."))
-    return(ggd[res])
+    ans <- ggd[res]
+    futile.logger::flog.info(paste("DONE. A total of", prettyDrop, "positions were dropped,", prettyLeft, "are left."))
+    return(ans)
 }

@@ -24,17 +24,16 @@
 #' column description.
 #' @details Note, that broad peaks don't provide a specific highest location, but a region. Whereas narrow peaks
 #' provide both. However, the borders of narrow peaks are not necessarily informative. Additionally narrow peaks provide
-#' a 95\% confidence interval for the position, namely 'peakLeft' and 'peakRight', which gives a more informative uncertainty
-#' measure to the peak position. Also narrow peaks provide an occupancy estimate at the peak position, while braod peaks
+#' a 95\% confidence interval for the position, namely 'start' and 'end', which gives a more informative uncertainty
+#' measure to the peak position. Also narrow peaks provide an occupancy estimate at the peak position, while broad peaks
 #' give the average occupancy accross the region.
 #' The columns returned are:
 #' 
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @export
-callPeaks <- function(fit, smooth = NULL, range = NULL, peakType = c("narrow", "broad"), border = c("min", "inflection"), threshold = NULL, thresholdType = c("fdr","pvalue"), maxgap = 500, cutoff = 0.05, minregion = 1) {
+callPeaks <- function(fit, smooth = NULL, range = NULL, peakType = c("narrow", "broad"), threshold = NULL, thresholdType = c("fdr","pvalue"), maxgap = 500, cutoff = 0.05, minregion = 1) {
     ## set parameters
     thresholdType <- match.arg(thresholdType)
-    border <- match.arg(border)
     peakType <- match.arg(peakType)
     if(is.null(threshold)) {
         threshold <- switch(thresholdType,
@@ -71,7 +70,7 @@ callPeaks <- function(fit, smooth = NULL, range = NULL, peakType = c("narrow", "
     
     if(peakType == "narrow") {
         futile.logger::flog.info("Calling narrow peaks")
-        npeaks <- getExtremes(x, splines, smooth, border)
+        npeaks <- getExtremes(x, splines, smooth)
         peaks <- computePeakSignificance(fit, npeaks, x)
     }
     if(peakType == "broad") {
@@ -169,12 +168,9 @@ computeTileExtremes <- function(ii, x, splines, smooth, what, useIntercept) {
 #' @return A data.table of all extreme points.
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @noRd
-getExtremes <- function(x, splines, smooth, border = c("min", "inflection")) {
+getExtremes <- function(x, splines, smooth) {
 
     ## define variables
-    what <- switch(border,
-                   min = "root",
-                   inflection = "all")
     
     intercept <- 0
     useIntercept <- FALSE
@@ -230,17 +226,6 @@ getExtremes <- function(x, splines, smooth, border = c("min", "inflection")) {
         }
         ext <- rbind(extMax,extMin)
         
-        if (what == "all") {
-            bool_indx <- ((f_pprime[,1] %in% round(roots_pprime)))
-            if(sum(bool_indx) == 0) {
-                extInf <- data.table::data.table(seqnames = factor(), position = integer(), summit = numeric(), type = factor())
-            }
-            else {
-                extInf <- data.table::data.table(seqnames = chrom[bool_indx], position = subx[bool_indx],
-                                                 summit = exp(spline[bool_indx]), type = "inflection")
-            }
-            ext <- rbind(ext, extInf)
-        }
         return(ext)
     })
     
@@ -373,7 +358,8 @@ computePeakSignificance <- function(fit, peaks, x) {
     })
     fdr[is.nan(fdr)] <- 0
     fdr <- fdr*(nrow(p)/nrow(v)) ## correct for different size of valleys and peaks to avoid FDR > 1
-    peaks <- parsePeaks(peaks, x)
+    peaks <- p
+    peaks$type <- NULL
     peaks$score <- -pnorm(-peaks$zscore, log.p = TRUE)
     peaks$fdr <- fdr
     attr(peaks, "smooth") <- smooth
@@ -395,10 +381,6 @@ parsePeaks <- function(peakDF, x) {
         peaks$to <- numeric()
         peaks$type <- NULL
         return(peaks)
-    }
-    
-    if("inflection" %in% levels(peakDF$type)) {
-        peakDF <- peakDF[type != "min",]
     }
     
     res <- lapply(levels(peakDF$seqnames), function(y) {
@@ -441,8 +423,6 @@ xsd <- function(fit, peaks) {
     splines <- slot(fit, "smooths")$splines
     index <- slot(fit, "smooths")$chunkIndex
     v <- slot(fit, "vcov")
-    peaks$peakLeft <- 0
-    peaks$peakRight <- 0
     gr <- GRanges(peaks$seqnames, IRanges(start = peaks$position, end = peaks$position))
     id <- subjectHits(findOverlaps(gr, index))
     peaks$id <- id
@@ -471,14 +451,14 @@ xsd <- function(fit, peaks) {
     })
     
     res <- unlist(res)
-    peaks$peakLeft <- peaks$position - 1.96 * sqrt(res)
-    peaks$peakRight <- peaks$position + 1.96 * sqrt(res)
-    peaks$peakLeft[which(peaks$peakLeft < 1)] <- 1
+    peaks$start <- peaks$position - 1.96 * sqrt(res)
+    peaks$end <- peaks$position + 1.96 * sqrt(res)
+    peaks$start[which(peaks$start < 1)] <- 1
     for(chrom in seqlevels(index)) {
-        indx <- which(peaks[seqnames == chrom, peakRight] > seqlengths(index)[chrom])
+        indx <- which(peaks[seqnames == chrom, end] > seqlengths(index)[chrom])
         if(length(indx) > 0) {
             pos <- peaks[seqnames == chrom, position][indx]
-            peaks[seqnames == chrom & position == pos]$peakRight <- seqlengths(index)[chrom]
+            peaks[seqnames == chrom & position == pos]$end <- seqlengths(index)[chrom]
         }
     }
     return(peaks)
