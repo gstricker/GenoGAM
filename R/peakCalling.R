@@ -197,8 +197,8 @@ getExtremes <- function(x, splines, smooth) {
         
         ## compute splines
         spline <- computeSpline(basis, na.omit(sp$coefs), intercept = intercept)
-        spline_prime <- computeSpline(basis_prime, na.omit(sp$coefs), intercept = intercept)
-        spline_pprime <- computeSpline(basis_pprime, na.omit(sp$coefs), intercept = intercept)
+        spline_prime <- computeSpline(basis_prime, na.omit(sp$coefs))
+        spline_pprime <- computeSpline(basis_pprime, na.omit(sp$coefs))
         
         ## find roots
         f_prime <- cbind(subx, spline_prime)
@@ -357,7 +357,7 @@ computePeakSignificance <- function(fit, peaks, x) {
         sum(v$zscore >= y)/sum(p$zscore >= y)
     })
     fdr[is.nan(fdr)] <- 0
-    fdr <- fdr*(nrow(p)/nrow(v)) ## correct for different size of valleys and peaks to avoid FDR > 1
+    if(nrow(v) > 0) fdr <- fdr*(nrow(p)/nrow(v)) ## correct for different size of valleys and peaks to avoid FDR > 1
     peaks <- p
     peaks$type <- NULL
     peaks$score <- -pnorm(-peaks$zscore, log.p = TRUE)

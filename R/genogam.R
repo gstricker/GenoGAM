@@ -17,9 +17,23 @@
 
     idx <- sample(length(data), 1)
     initDataset <- .meltGTile(list(data[[idx]]), experimentDesign, sf, formula)
-    init <- mgcv::gam(formula, initDataset[[1]], family = family, sp = sp)
-    theta <- init$family$getTheta()
-    lambda <- init$full.sp
+
+    ## The tryCatch not very elegant, but for now necessary to workaround
+    ## the mgcv routine to estimate a first guess in low count regions.
+    ## Otherwise the while loop in mgcv runs til divison by zero (see function mgcv::initial.sp)
+    init <- tryCatch({
+        mgcv::gam(formula, initDataset[[1]], family = family, sp = sp)
+    }, error = function(e) {
+        c(lambda = 100, theta = 5)
+    })
+    if(class(init)[1] == "numeric") {
+        lambda <- init['lambda']
+        theta <- init['theta']
+    }
+    else {
+        theta <- init$family$getTheta()
+        lambda <- init$full.sp
+    }
     if(is.null(lambda)) lambda <- mean(init$sp)
 
     if(fixedPars[1]) {

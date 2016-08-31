@@ -134,7 +134,7 @@ setValidity2("GenoGAMDataSet", .validateGenoGAMDataSet)
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @export
 GenoGAMDataSet <- function(experimentDesign, chunkSize, overhangSize, design,
-                           directory = ".", ...) {
+                           directory = ".", settings = NULL, ...) {
 
     if(missing(experimentDesign)) {
         gt <- GenomicTiles()
@@ -146,7 +146,7 @@ GenoGAMDataSet <- function(experimentDesign, chunkSize, overhangSize, design,
                                     chunkSize = chunkSize,
                                     overhangSize = overhangSize,
                                     design = design,
-                                    settings = NULL, ...)
+                                    settings = settings, ...)
     }
     else {
         gt <- .GenoGAMDataSetFromConfig(config = experimentDesign,
@@ -154,7 +154,7 @@ GenoGAMDataSet <- function(experimentDesign, chunkSize, overhangSize, design,
                                         overhangSize = overhangSize,
                                         design = design,
                                         directory = directory,
-                                        settings = NULL, ...)
+                                        settings = settings, ...)
     }
     
     return(gt)

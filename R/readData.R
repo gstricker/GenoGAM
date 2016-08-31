@@ -92,11 +92,13 @@
 .chunkBAM <- function(starts, stops, chunkSize) {
     lengths <- stops - starts + 1
     chunks <- ceiling(lengths/chunkSize)
+    
 
     start <- sapply(1:length(starts), function(ii) {
         if(chunks[ii] <= 1) return(starts[ii])
         else {
             cutPoints <- as.integer(seq(from = starts[ii] - 1, to = stops[ii], length.out = chunks[ii] + 1))
+            names(cutPoints) <- rep(names(starts)[ii], length(cutPoints))
             return(cutPoints[-length(cutPoints)] + 1)
         }
     })
@@ -105,6 +107,7 @@
         if(chunks[ii] <= 1) return(stops[ii])
         else {
             cutPoints <- as.integer(seq(from = starts[ii] - 1, to = stops[ii], length.out = chunks[ii] + 1))
+            names(cutPoints) <- rep(names(starts)[ii], length(cutPoints))
             return(cutPoints[-1])
         }
     })
@@ -142,8 +145,7 @@
     if(is.null(obj)) return(NULL)
 
     id <- attr(obj,"chunkId")
-    chroms <- GenomeInfoDb::seqlevelsInUse(id)
-    chromsList <- splitAsList(id, chroms)
+    chromsList <- split(id, seqnames(id))
     
     res <- lapply(chromsList, function(x) {
         Rle(rep(init, sum(width(x))))

@@ -22,7 +22,7 @@
     covars <- .getVars(formula, "covar")
     chFormula <- as.character(formula)
     variables <- strsplit(chFormula[2],"\\+")[[1]]
-    variables[covars == "x"] <- gsub("x", "pos", variables[covars == "x"])
+    variables[covars == "x"] <- gsub("x(?=,|\\))", "pos", variables[covars == "x"], perl = TRUE)
        
     variables <- gsub(")", paste0(', bs = "ps", k = ', knots ,', m = ', m ,')'),
                                 variables)

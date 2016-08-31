@@ -263,8 +263,8 @@ GenomicTiles <- function(assays, chunkSize = 1e4, overhangSize = 0, ...) {
 
     tileList <- BiocParallel::bplapply(l$chromosomes, function(y) {
         nchunks <- ceiling(width(y)/l$chunkSize)
-        starts <- start(y) + seq(0, nchunks - 1) * l$chunkSize
-        ends <- c(start(y) + seq(1, nchunks - 1) * l$chunkSize - 1, end(y))
+        starts <- start(y) + seq(0, nchunks - 1, length.out = nchunks) * l$chunkSize
+        ends <- c(start(y) + seq(1, nchunks - 1, length.out = (nchunks - 1)) * l$chunkSize - 1, end(y))
         chunks <- GenomicRanges::GRanges(seqnames = seqnames(y), IRanges(starts, ends))
         if(l$tileSize == l$chunkSize) {
             tiles <- chunks
@@ -403,29 +403,29 @@ setGeneric("getChunkIndex", function(object, ...) standardGeneric("getChunkIndex
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @export
 setMethod("getChunkIndex", "GenomicTiles", function(object, id = NULL) {
-    index <- getIndex(object)
-    if(length(index) == 0) return(index)
-    rowCoords <- getCoordinates(object)
-    gpCoords <- slot(rowRanges(object), "pos_runs")
-    GenomeInfoDb::seqlengths(index) <- rep(NA, length(GenomeInfoDb::seqlengths(index)))
-    index$block <- subjectHits(findOverlaps(index, gpCoords))
+  index <- getIndex(object)
+  if(length(index) == 0) return(index)
+  rowCoords <- getCoordinates(object)
+  gpCoords <- slot(rowRanges(object), "pos_runs")
+  GenomeInfoDb::seqlengths(index) <- rep(NA, length(GenomeInfoDb::seqlengths(index)))
+  index$block <- subjectHits(findOverlaps(index, gpCoords))
     
-    splitIndx <- split(index, index$block)
-    
-    chunkIndex <- lapply(splitIndx, function(y) {
-        start <- c(start(y[1]), ceiling((end(y[-length(y)]) + start(y[-1]))/2))
-        end <- c(ceiling((end(y[-length(y)]) + start(y[-1]))/2 - 1), end(y[length(y)]))
-        start(y) <- start
-        end(y) <- end
-        return(y)
-    })
+  splitIndx <- split(index, index$block)    
+  
+  chunkIndex <- lapply(splitIndx, function(y) {
+    start <- c(start(y[1]), ceiling((end(y[-length(y)]) + start(y[-1]))/2))
+    end <- c(ceiling((end(y[-length(y)]) + start(y[-1]))/2 - 1), end(y[length(y)]))
+    start(y) <- start
+    end(y) <- end
+    return(y)
+  })
 
-    res <- do.call(c, unname(chunkIndex))
-    res$block <- NULL
-    metadata(res) <- metadata(index)
-
-    if(!is.null(id)) res <- res[mcols(res)$id %in% id]
-    return(res)
+  res <- do.call(c, unname(chunkIndex))
+  res$block <- NULL
+  metadata(res) <- metadata(index)
+  
+  if(!is.null(id)) res <- res[mcols(res)$id %in% id]
+  return(res)
 })
 
 #' @rdname untile
@@ -1158,7 +1158,7 @@ setMethod("subsetByOverlaps", c("GenomicTiles", "GRanges"),
     
     dfList <- do.call(c, bplapply(blockList, function(y) {
         require(GenoGAM, quietly = TRUE)
-        blockindx <- index[mcols(index)$id == y]
+        blockindx <- index[match(y, index$id),]
         subgt <- .subsetByOverlaps(gt, blockindx)
         df <- DataFrame(subgt)
         coords <- unlistCoordinates(subgt,
@@ -1171,7 +1171,7 @@ setMethod("subsetByOverlaps", c("GenomicTiles", "GRanges"),
     return(dfList)
 }
 
-.extractGenomicTilesByIndex <- function(gt, index, size = 3e7) {
+.extractGenomicTilesByIndex <- function(gt, index, size = 3e9) {
     chromosomes <- GenomeInfoDb::seqlevels(index)
     gtDims <- dim(gt)
     if(all(gtDims == c(0, 0))) return(DataFrameList())
@@ -1229,7 +1229,7 @@ setGeneric("getTile", function(object, id, ...) standardGeneric("getTile"))
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @rdname getTile
 #' @export
-setMethod("getTile", "GenomicTiles", function(object, id, size = 3e7) {
+setMethod("getTile", "GenomicTiles", function(object, id, size = 3e9) {
     if(missing(id)) {
         indx <- getIndex(object)
         id <- mcols(indx)$id
