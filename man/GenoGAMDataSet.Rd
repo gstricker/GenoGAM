@@ -5,7 +5,7 @@
 \title{GenoGAMDataSet constructor.}
 \usage{
 GenoGAMDataSet(experimentDesign, chunkSize, overhangSize, design,
-  directory = ".", ...)
+  directory = ".", settings = NULL, ...)
 }
 \arguments{
 \item{experimentDesign}{Either a character object specifying the path to a

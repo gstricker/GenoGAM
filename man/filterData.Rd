@@ -8,7 +8,7 @@ filterData(ggd, threshold = NULL, windowsize = 201, mode = c("sum",
   "mean"))
 }
 \arguments{
-\item{ggd}{A |code{GenoGAMDataSet} object}
+\item{ggd}{A \code{GenoGAMDataSet} object}
 
 \item{threshold}{A value for the mean or sum of counts, which will be used to filter on basepair level.
 By default it is taken as median + 3*MAD}
@@ -18,7 +18,7 @@ By default it is taken as median + 3*MAD}
 \item{mode}{Should the sum or the mean of counts be used?}
 }
 \value{
-A |code{GenoGAMDataSet} object containing the filtered regions
+A \code{GenoGAMDataSet} object containing the filtered regions
 }
 \description{
 A function to filter the |code{GenoGAMDataSet} by the sum or mean of counts to significantly reduce

@@ -63,6 +63,7 @@ Collate:
     'genogam.R'
     'helper.R'
     'peakCalling.R'
+    'plotting.R'
     'qc.R'
     'readData.R'
     'sf.R'

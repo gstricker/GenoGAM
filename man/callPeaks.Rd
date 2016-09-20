@@ -5,9 +5,8 @@
 \title{Call peaks on a GenoGAM object}
 \usage{
 callPeaks(fit, smooth = NULL, range = NULL, peakType = c("narrow",
-  "broad"), border = c("min", "inflection"), threshold = NULL,
-  thresholdType = c("fdr", "pvalue"), maxgap = 500, cutoff = 0.05,
-  minregion = 1)
+  "broad"), threshold = NULL, thresholdType = c("fdr", "pvalue"),
+  maxgap = 500, cutoff = 0.05, minregion = 1)
 }
 \arguments{
 \item{fit}{A \code{GenoGAM} object}
@@ -18,9 +17,6 @@ the last one will be taken.}
 \item{range}{A \code{GRanges} object specifying a range. Bt default the complete fit is taken.}
 
 \item{peakType}{The type of the peak (narrow or broad). Default is narrow, see details.}
-
-\item{border}{The border type of narrow peaks. Since the fit is a function, those can be defiend by either the minimas
-around the peak (broader) or the inflection points (more narrow).}
 
 \item{threshold}{The significance threshold. Keep in mind that the treshold depends on the thresholdType.
 By default this is 0.05 for 'pvalue' and 0.1 for 'fdr'.}
@@ -36,6 +32,9 @@ merged.}
 to identify all significantly high positions, which then make up a broad peak.}
 
 \item{minregion}{For broad peaks only. The minimum length of a broad peak. By default 1, thus catching also narrow peaks.}
+
+\item{border}{The border type of narrow peaks. Since the fit is a function, those can be defiend by either the minimas
+around the peak (broader) or the inflection points (more narrow).}
 }
 \value{
 A data.table of identified peaks. The different columns loosely resemble the narrow and broad peak format
@@ -48,8 +47,8 @@ Call narrow or broad peaks on the GenoGAM fit and computing significance, respec
 \details{
 Note, that broad peaks don't provide a specific highest location, but a region. Whereas narrow peaks
 provide both. However, the borders of narrow peaks are not necessarily informative. Additionally narrow peaks provide
-a 95\% confidence interval for the position, namely 'peakLeft' and 'peakRight', which gives a more informative uncertainty
-measure to the peak position. Also narrow peaks provide an occupancy estimate at the peak position, while braod peaks
+a 95\% confidence interval for the position, namely 'start' and 'end', which gives a more informative uncertainty
+measure to the peak position. Also narrow peaks provide an occupancy estimate at the peak position, while broad peaks
 give the average occupancy accross the region.
 The columns returned are:
 }

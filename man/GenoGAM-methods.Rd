@@ -2,6 +2,7 @@
 % Please edit documentation in R/GenoGAM-class.R
 \docType{methods}
 \name{rowRanges,GenoGAM-method}
+\alias{colData,GenoGAM-method}
 \alias{design,GenoGAM-method}
 \alias{getFits}
 \alias{getFits,GenoGAM-method}
@@ -15,31 +16,42 @@
 getFits(object)
 
 \S4method{getFits}{GenoGAM}(object)
+
+\S4method{colData}{GenoGAM}(x)
 }
 \arguments{
-\item{object}{A \code{GenoGAM} object.}
+\item{object}{A GenoGAM object.}
 
-\item{object}{A \code{GenoGAM} object.}
+\item{object}{A formula object.}
 
-\item{object}{A \code{GenomicTiles} object}
+\item{object}{A GenoGAM object}
+
+\item{object}{A GenoGAM object}
 }
 \value{
-A \code{GPos} object representing the positions
+A GPos object representing the positions
 
-An experiment design matrix
+The formula of the fit
 
 A data.frame of the fits
+
+A named matrix
 }
 \description{
 The positions slot holds the positions of the fits as a |code{GPos} object
 
-The positions slot holds the experiment design of the fits as a |code{GPos} object
+The 'design' slot holds the formula of the fit
 
-The \code{fits} slot contains the fitted values of the model
+The 'fits' slot contains the fitted values of the model
+
+The 'experimentDesign' slot contains the experimental design of the model as
+specified in the config file
 }
 \examples{
 gg <- makeTestGenoGAM()
 fits <- getFits(gg)
+gg <- makeTestGenoGAM()
+fits <- colData(gg)
 }
 \author{
 Georg Stricker \email{georg.stricker@in.tum.de}
