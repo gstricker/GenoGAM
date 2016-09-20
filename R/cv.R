@@ -53,12 +53,10 @@
 .loglik <- function(pars, gtiles, CV_intervals, formula,
                     fixedpars = list(lambda = NULL, theta = NULL), ...){
     coords <- attr(gtiles, "settings")$chunks
-    lambda <- fixedpars$lambda
-    theta <- fixedpars$theta
-    if(is.null(lambda)) {
+    if(is.null(fixedpars$lambda)) {
         lambda <- exp(pars[["lambda"]])
     }
-    if(is.null(theta)) {
+    if(is.null(fixedpars$theta)) {
         theta <- exp(pars["theta"])
     }
     
@@ -67,22 +65,25 @@
     })
     names(fullpred) <- names(gtiles)
     ids <- expand.grid(folds = 1:length(CV_intervals), tiles = 1:length(gtiles))
-    
-    cvs <- bplapply(1:nrow(ids), function(ii){
+
+    lambdaFun <- function(iter, ids, gtiles, CV_intervals, formula, 
+                          fixedpars) {
         require(GenoGAM, quietly = TRUE)
-        id <- ids[ii,]
+        id <- ids[iter,]
         
         testset <- gtiles[[id$tiles]][CV_intervals[[id$folds]],]
         trainset <- gtiles[[id$tiles]][-CV_intervals[[id$folds]],]
                     
-        ##newFormula <- .updateFormula(formula, lambda)
         nvars <- length(.getVars(formula)) - 1
-        mod <- mgcv::gam(formula, data = trainset, family = mgcv::nb(theta=theta), method = "REML",
-                         sp = rep(lambda, nvars), ...)
+        mod <- mgcv::gam(formula, data = trainset, family = mgcv::nb(theta=fixedpars$theta), method = "REML",
+                         sp = rep(fixedpars$lambda, nvars), ...)
             
         pred <- mgcv::predict.gam(mod, newdata = testset, type="response")
         return(pred)
-    })
+    }
+    
+    cvs <- bplapply(1:nrow(ids), lambdaFun, ids = ids, gtiles = gtiles,
+                    CV_intervals, formula = formula, fixedpars = fixedpars)
 
     for(ii in 1:length(cvs)) {
         id <- ids[ii,]

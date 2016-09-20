@@ -97,110 +97,122 @@
 genogam <- function(ggd, lambda = NULL, family = mgcv::nb(),
                     bpknots = 20, kfolds = 10, intervallSize = 20, m = 2) {
 
-    settings <- slot(ggd, "settings")
-    chunkIndex <- getIndexCoordinates(ggd, index = getChunkIndex(ggd))
-    tileIndex <- getIndexCoordinates(ggd)
-    tileSettings <- tileSettings(ggd)
-    check <- checkSettings(ggd)
-    if(!check) break
+  settings <- slot(ggd, "settings")
+  chunkCoords <- getChunkIndex(ggd)
+  tileIndex <- getIndex(ggd)
+  tileSettings <- tileSettings(ggd)
+  check <- checkSettings(ggd)
+  if(!check) break
     
-    knots <- round(tileSettings$tileSize/bpknots)
-    if(knots > 100) {
-        warning("Number of knots is above the recommended maximum of 100. Computation time will be high. Decrease tile size for faster computation.")
-    }
+  knots <- round(tileSettings$tileSize/bpknots)
+  if(knots > 100) {
+    warning("Number of knots is above the recommended maximum of 100. Computation time will be high. Decrease tile size for faster computation.")
+  }
 
-    if(family$n.theta == 0) theta <- family$getTheta(trans = TRUE)
-    else theta <- NULL
-    FIXLAMBDA <- ifelse(is.null(lambda), FALSE, TRUE)
-    FIXTHETA <- ifelse(is.null(theta), FALSE, TRUE)
-    cv <- FALSE
+  if(family$n.theta == 0) theta <- family$getTheta(trans = TRUE)
+  else theta <- NULL
+  FIXLAMBDA <- ifelse(is.null(lambda), FALSE, TRUE)
+  FIXTHETA <- ifelse(is.null(theta), FALSE, TRUE)
+  cv <- FALSE
     
-    formula <- design(ggd)
-    formula <- .updateFormula(formula, knots, m)
-        
-    ## How many splines?
-    vars <- .getVars(formula)[-1]
-    nsplines <- length(vars)
+  formula <- design(ggd)
+  formula <- .updateFormula(formula, knots, m)
+  
+  ## How many splines?
+  vars <- .getVars(formula)[-1]
+  nsplines <- length(vars)
 
-    ## convert data
-    futile.logger::flog.info("Process data")
-    data <- getTile(ggd)
-    chunkCoords <- getChunkIndex(ggd)
+  ## convert data
+  futile.logger::flog.info("Process data")
+  data <- getTile(ggd)
+  vec <- Rle(rep(tileIndex$id, width(tileIndex)))
+  data@unlistData$id <- vec
 
-    ncv <- min(20, length(data))
+  ncv <- min(20, length(data))
 
-    if(is.null(lambda) | is.null(theta)) {
-        futile.logger::flog.info("Estimating parameters")
-        ## initialize parameters for CV
-        sp <- rep(lambda, nsplines)
-        init <- .initCV(formula, data, family, sp, c(FIXLAMBDA, FIXTHETA), colData(ggd), sizeFactors(ggd))
+  if(is.null(lambda) | is.null(theta)) {
+    futile.logger::flog.info("Estimating parameters")
+    ## initialize parameters for CV
+    sp <- rep(lambda, nsplines)
+    init <- .initCV(formula, data, family, sp, c(FIXLAMBDA, FIXTHETA), colData(ggd), sizeFactors(ggd))
 
-        ## get the tile ids for CV
-        sumMatrix <- sum(ggd)
-        if(ncv >= 20) {
-            pvals <- suppressMessages(suppressWarnings(.deseq(sumMatrix[[1]], names(sizeFactors(ggd)))))
-            ids <- order(pvals)[1:ncv]
-        }
-        else ids <- 1:length(data)
-        
-        ## perform CV
-        params <- .doCrossValidation(init$pars, .loglik, data[ids], formula = formula,
-                                     folds = kfolds, intervallSize = intervallSize,
-                                     fixedpars = init$fpars,
-                                     experimentDesign = colData(ggd), sf = sizeFactors(ggd),
-                                     method = getDefaults(settings, "optimMethod"),
-                                     control = getDefaults(settings, "optimControl"))
-        names(params) <- c("lambda", "theta")
-        lambda <- params[1]
-        theta <- params[2]
-
-        cv <- TRUE
-        futile.logger::flog.info("Done")
+    ## get the tile ids for CV
+    sumMatrix <- sum(ggd)
+    if(ncv >= 20) {
+      pvals <- suppressMessages(suppressWarnings(.deseq(sumMatrix[[1]], names(sizeFactors(ggd)))))
+      ids <- order(pvals)[1:ncv]
     }
-    if(!FIXTHETA) family <- mgcv::nb(theta = theta)
+    else ids <- 1:length(data)
+    
+    ## perform CV
+    params <- .doCrossValidation(init$pars, .loglik, data[ids], formula = formula,
+                                 folds = kfolds, intervallSize = intervallSize,
+                                 fixedpars = init$fpars,
+                                 experimentDesign = colData(ggd), sf = sizeFactors(ggd),
+                                 method = getDefaults(settings, "optimMethod"),
+                                 control = getDefaults(settings, "optimControl"))
+    names(params) <- c("lambda", "theta")
+    lambda <- params[1]
+    theta <- params[2]
 
-    futile.logger::flog.info("Fitting model")
-    res <- bplapply(1:length(data), function(ii) {
-        require(GenoGAM, quietly = TRUE)
-        df <- .meltGTile(list(data[[ii]]), colData(ggd), sizeFactors(ggd), formula)
-        mod <- mgcv::gam(formula, df[[1]], family = family, sp = rep(lambda, nsplines))
-        fits <- getFunctions(mod, df[[1]])
-        rowindx <- (start(chunkIndex[ii,]):end(chunkIndex[ii,])) - (start(tileIndex[ii,]) - 1)
-        fits <- fits[rowindx,]
-        smooths <- extractSplines(mod)
-        vcov <- mgcv::vcov.gam(mod)
-        upperTri_vcov <- upper.tri(vcov, diag = TRUE)
-        vcov <- vcov[upperTri_vcov]
-        attr(vcov, "smooths") <- na.omit(smooths)$smooth
-        return(list(fits = fits, smooths = smooths, vcov = vcov))
-    })
+    cv <- TRUE
+    futile.logger::flog.info("Done")
+  }
+  if(!FIXTHETA) family <- mgcv::nb(theta = theta)
+  cdata <- colData(ggd)
+  sf <- sizeFactors(ggd)
+  lambda_vec<- rep(lambda, nsplines)
 
-    smooths <- list(chunkIndex = getChunkIndex(ggd),
-                    splines = list())
-    smooths$splines <- lapply(res, function(y) y$smooths)
-    names(smooths$splines) <- tileIndex$id
-    vcov <- lapply(res, function(y) y$vcov)
-    names(vcov) <- tileIndex$id
-    fits <- lapply(res, function(y) y$fits)
+  futile.logger::flog.info("Fitting model")
 
-    ##combine
-    fits <- data.table::rbindlist(fits)
+  
+  lambdaFun <- function(data, colData, sf, formula, family, lambdas, 
+                        chunkIndex) {
+    require(GenoGAM, quietly = TRUE)
+    id <- runValue(data$id)
+    df <- .meltGTile(list(data), colData, sf, formula)
+    mod <- mgcv::gam(formula, df[[1]], family = family, sp = lambdas)
+    fits <- getFunctions(mod, df[[1]])
+    rowindx <- match(c(start(chunkIndex[id]), end(chunkIndex[id])), data$pos)
+    fits <- fits[seq(from = rowindx[1], to = rowindx[2]),]
+    smooths <- extractSplines(mod)
+    attr(smooths, "id") <- id
+    vcov <- mgcv::vcov.gam(mod)
+    upperTri_vcov <- upper.tri(vcov, diag = TRUE)
+    vcov <- vcov[upperTri_vcov]
+    attr(vcov, "smooths") <- na.omit(smooths)$smooth
+    return(list(fits = fits, smooths = smooths, vcov = vcov))
+  }
 
-    ## create GenoGAM object
-    fitparams <- c(lambda = unname(lambda), theta = unname(family$getTheta(trans = TRUE)),
-                   CoV = sqrt(1/unname(family$getTheta(trans = TRUE))), penorder = m)
-    cvparams <- c(kfolds = kfolds, ncv = ncv, size = intervallSize, cv = cv)
-    tempFormula <- gsub("pos", "x", formula)
-    saveFormula <- as.formula(paste(tempFormula[2], tempFormula[1], tempFormula[3]))
-    genogamObject <- .GenoGAM(design = saveFormula, fits = fits,
-                              positions = rowRanges(ggd), smooths = smooths, vcov = vcov,
-                              experimentDesign = as.matrix(colData(ggd)[,na.omit(vars), drop = FALSE]),
-                              fitparams = fitparams, family = family,
-                              cvparams = cvparams, settings = settings,
-                              tileSettings = tileSettings)
+  res <- bplapply(data, lambdaFun, colData = cdata, sf = sf, formula = formula,
+                  family = family, lambdas = lambda_vec, chunkIndex = chunkCoords)
 
-    futile.logger::flog.info("DONE")
-    return(genogamObject)
+  smooths <- list(chunkIndex = chunkCoords,
+                  splines = list())
+  smooths$splines <- lapply(res, function(y) y$smooths)
+  names(smooths$splines) <- chunkCoords$id
+  vcov <- lapply(res, function(y) y$vcov)
+  names(vcov) <- chunkCoords$id
+  fits <- lapply(res, function(y) y$fits)
+
+  ##combine
+  fits <- data.table::rbindlist(fits)
+
+  ## create GenoGAM object
+  fitparams <- c(lambda = unname(lambda), theta = unname(family$getTheta(trans = TRUE)),
+                 CoV = sqrt(1/unname(family$getTheta(trans = TRUE))), penorder = m)
+  cvparams <- c(kfolds = kfolds, ncv = ncv, size = intervallSize, cv = cv)
+  tempFormula <- gsub("pos", "x", formula)
+  saveFormula <- as.formula(paste(tempFormula[2], tempFormula[1], tempFormula[3]))
+  genogamObject <- .GenoGAM(design = saveFormula, fits = fits,
+                            positions = rowRanges(ggd), smooths = smooths, vcov = vcov,
+                            experimentDesign = as.matrix(colData(ggd)[,na.omit(vars), drop = FALSE]),
+                            fitparams = fitparams, family = family,
+                            cvparams = cvparams, settings = settings,
+                            tileSettings = tileSettings)
+
+  futile.logger::flog.info("DONE")
+  return(genogamObject)
 }
 
 #' Get all the splines and derivatives

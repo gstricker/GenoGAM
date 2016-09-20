@@ -147,36 +147,36 @@ setValidity2("GenoGAM", .validateGenoGAM)
 #' The positions slot holds the positions of the fits as a |code{GPos} object
 #'
 #' @rdname GenoGAM-methods
-#' @param object A \code{GenoGAM} object.
-#' @return A \code{GPos} object representing the positions
+#' @param object A GenoGAM object.
+#' @return A GPos object representing the positions
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @export
 setMethod("rowRanges", "GenoGAM", function(x) {
     x@positions
 })
 
-#' Accessor to the 'experimentDesign' slot
+#' Accessor to the 'design' slot
 #'
-#' The positions slot holds the experiment design of the fits as a |code{GPos} object
+#' The 'design' slot holds the formula of the fit
 #'
 #' @rdname GenoGAM-methods
-#' @param object A \code{GenoGAM} object.
-#' @return An experiment design matrix
+#' @param object A formula object.
+#' @return The formula of the fit
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @export
 setMethod("design", "GenoGAM", function(object) {
-    object@experimentDesign
+    object@design
 })
 
 #' @rdname GenoGAM-methods
 #' @export
 setGeneric("getFits", function(object) standardGeneric("getFits"))
 
-#' Accessor to \code{fits} slot
+#' Accessor to 'fits' slot
 #'
-#' The \code{fits} slot contains the fitted values of the model
+#' The 'fits' slot contains the fitted values of the model
 #'
-#' @param object A \code{GenomicTiles} object
+#' @param object A GenoGAM object
 #' @return A data.frame of the fits
 #' @examples
 #' gg <- makeTestGenoGAM()
@@ -184,6 +184,20 @@ setGeneric("getFits", function(object) standardGeneric("getFits"))
 #' @rdname GenoGAM-methods
 #' @export
 setMethod("getFits", "GenoGAM", function(object) object@fits)
+
+#' Accessor to the 'experimentDesign' slot
+#'
+#' The 'experimentDesign' slot contains the experimental design of the model as
+#' specified in the config file
+#'
+#' @param object A GenoGAM object
+#' @return A named matrix
+#' @examples
+#' gg <- makeTestGenoGAM()
+#' fits <- colData(gg)
+#' @rdname GenoGAM-methods
+#' @export
+setMethod("colData", "GenoGAM", function(x) x@experimentDesign)
 
 ## Cosmetics
 ## ==========
@@ -257,7 +271,7 @@ makeTestGenoGAM <- function() {
 }
 
 .subsetByRanges <- function(gg, ranges) {
-    pos <- slot(gg, "positions")
+    pos <- rowRanges(gg)
     ov <- findOverlaps(pos, ranges)
     indx <- queryHits(ov)
     slot(gg, "positions") <- pos[indx,]

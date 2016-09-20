@@ -65,8 +65,9 @@ callPeaks <- function(fit, smooth = NULL, range = NULL, peakType = c("narrow", "
     
     ## find row index by overlaps and subset position vector
     iid <- queryHits(findOverlaps(index, fit@positions[xid]))
-    x <- data.table::data.table(seqnames = as.factor(seqnames(fit@positions)[xid]),
-                                pos = pos(fit@positions)[xid], id = iid)
+
+  x <- DataFrame(seqnames = Rle(as.factor(seqnames(fit@positions)[xid])),
+                              pos = pos(fit@positions)[xid], id = Rle(iid))
     
     if(peakType == "narrow") {
         futile.logger::flog.info("Calling narrow peaks")
@@ -168,7 +169,7 @@ computeTileExtremes <- function(ii, x, splines, smooth, what, useIntercept) {
 #' @return A data.table of all extreme points.
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @noRd
-getExtremes <- function(x, splines, smooth) {
+getExtremes <- function(x, splines, smooth) {q
 
     ## define variables
     
@@ -179,55 +180,60 @@ getExtremes <- function(x, splines, smooth) {
     }
     
     ids <- unique(x$id)
+
+  lambdaFun <- function(params, x, smooth) {
+    require(GenoGAM, quietly = TRUE)
+
+    sp <- params[params$smooth == smooth,]
+    ii <- attr(params, "id")
     
-    res <- BiocParallel::bplapply(ids, function(ii) {
-        require(GenoGAM, quietly = TRUE)
-        
-        subx <- data.table::copy(x[id == ii, pos])
-        chrom <- data.table::copy(x[id == ii, seqnames])
-        sp <- splines[[as.character(ii)]][splines[[as.character(ii)]]$smooth == smooth,]
-        if(useIntercept) {
-            intercept <- attr(splines[[as.character(ii)]], "intercept")
-        }
-        
-        ## compute basis
-        basis <- bspline(subx, sp$knots)
-        basis_prime <- bspline(subx, sp$knots, derivative = 1)
-        basis_pprime <- bspline(subx, sp$knots, derivative = 2)
-        
-        ## compute splines
-        spline <- computeSpline(basis, na.omit(sp$coefs), intercept = intercept)
-        spline_prime <- computeSpline(basis_prime, na.omit(sp$coefs))
-        spline_pprime <- computeSpline(basis_pprime, na.omit(sp$coefs))
-        
-        ## find roots
-        f_prime <- cbind(subx, spline_prime)
-        f_pprime <- cbind(subx, spline_pprime)
-        roots_prime <- find_root(f_prime)
-        roots_pprime <- find_root(f_pprime)
-        
-        ## classify
-        bool_indx <- ((f_pprime[,1] %in% round(roots_prime)) & (f_pprime[,2] < 0))
-        if(sum(bool_indx) == 0) {
-            extMax <- data.table::data.table(seqnames = factor(), position = integer(), summit = numeric(), type = factor())
-        }
-        else {
-            extMax <- data.table::data.table(seqnames = chrom[bool_indx], position = subx[bool_indx],
-                                             summit = exp(spline[bool_indx]), type = "max")
-        }
-        
-        bool_indx <- ((f_pprime[,1] %in% round(roots_prime)) & (f_pprime[,2] > 0))
-        if(sum(bool_indx) == 0) {
-            extMin <- data.table::data.table(seqnames = factor(), position = integer(), summit = numeric(), type = factor())
-        }
-        else {
-            extMin <- data.table::data.table(seqnames = chrom[bool_indx], position = subx[bool_indx],
-                                             summit = exp(spline[bool_indx]), type = "min")
-        }
-        ext <- rbind(extMax,extMin)
-        
-        return(ext)
-    })
+    subx <- x[x$id == ii, "pos"]
+    chrom <- x[x$id == ii, "seqnames"]
+
+    if(useIntercept) {
+      intercept <- attr(params, "intercept")
+    }
+    
+    ## compute basis
+    basis <- bspline(subx, sp$knots)
+    basis_prime <- bspline(subx, sp$knots, derivative = 1)
+    basis_pprime <- bspline(subx, sp$knots, derivative = 2)
+    
+    ## compute splines
+    spline <- computeSpline(basis, na.omit(sp$coefs), intercept = intercept)
+    spline_prime <- computeSpline(basis_prime, na.omit(sp$coefs))
+    spline_pprime <- computeSpline(basis_pprime, na.omit(sp$coefs))
+    
+    ## find roots
+    f_prime <- cbind(subx, spline_prime)
+    f_pprime <- cbind(subx, spline_pprime)
+    roots_prime <- find_root(f_prime)
+    roots_pprime <- find_root(f_pprime)
+    
+    ## classify
+    bool_indx <- ((f_pprime[,1] %in% round(roots_prime)) & (f_pprime[,2] < 0))
+    if(sum(bool_indx) == 0) {
+      extMax <- data.table::data.table(seqnames = factor(), position = integer(), summit = numeric(), type = factor())
+    }
+    else {
+      extMax <- data.table::data.table(seqnames = as.factor(chrom[bool_indx]), position = as.vector(subx[bool_indx]),
+                                       summit = exp(spline[bool_indx]), type = "max")
+    }
+    
+    bool_indx <- ((f_pprime[,1] %in% round(roots_prime)) & (f_pprime[,2] > 0))
+    if(sum(bool_indx) == 0) {
+      extMin <- data.table::data.table(seqnames = factor(), position = integer(), summit = numeric(), type = factor())
+    }
+    else {
+      extMin <- data.table::data.table(seqnames = as.factor(chrom[bool_indx]), position = as.vector(subx[bool_indx]),
+                                       summit = exp(spline[bool_indx]), type = "min")
+    }
+    ext <- rbind(extMax,extMin)
+    
+    return(ext)
+  }
+    
+    res <- lapply(splines, lambdaFun, x = x, smooth = smooth)
     
     res <- data.table::rbindlist(res)
     res$type <- as.factor(res$type)

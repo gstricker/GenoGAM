@@ -70,21 +70,25 @@
     }
     
     chunkGRanges <- .chunkBAM(starts, ends, chunkSize)
+
+  lambdaFun <- function(grChunk, asMates, indexFile, params, processFUN, args) {
+    require(GenoGAM, quietly = TRUE)
+    Rsamtools::bamWhich(params) <- grChunk
+    if (asMates) reads <- GenomicAlignments::readGAlignmentPairs(path, index = indexFile, param = params)
+    else reads <- GenomicAlignments::readGAlignments(path, index = indexFile, param = params)
+    
+    if(length(reads) == 0L) return(NULL)
+    
+    args$coords <- grChunk
+    ans <- do.call(processFUN, c(list(reads), args))
+    return(ans)
+  }
     
     # run BAM reading in parallel. Check backend by bpparam().
-    res <- bplapply(1:length(chunkGRanges), function(ii) {
-        require(GenoGAM, quietly = TRUE)
-        Rsamtools::bamWhich(params) <- chunkGRanges[ii]
-        if (asMates) reads <- GenomicAlignments::readGAlignmentPairs(path, index = indexFile, param = params)
-        else reads <- GenomicAlignments::readGAlignments(path, index = indexFile, param = params)
-
-        if(length(reads) == 0L) return(NULL)
-
-        args$coords <- chunkGRanges[ii]
-        ans <- do.call(processFUN, c(list(reads), args))
-        return(ans)
-    })
-    
+    res <- bplapply(chunkGRanges, lambdaFun, asMates = asMates, 
+                    indexFile = indexFile, params = params, 
+                    processFUN = processFUN, args = args)
+  
     attr(res,"chunkId") <- chunkGRanges
     return(res)
 }

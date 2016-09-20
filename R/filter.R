@@ -2,7 +2,7 @@
 #'
 #' Merges consecutive range intervalls in a GRanges object to one range given a certain tolerance intervall
 #'
-#' @param ranges A |code{GRanges} object
+#' @param ranges A \code{GRanges} object
 #' @param overlap The overlap in basepairs. All consecutive ranges which differ by this value
 #' and less will be merged. E.g. a negative number -x means an actual overlap of x+1 basepairs. A positive
 #' number x means a gap of x-1 basepairs. Default is zero, which merges all consecutive ranges with at least
@@ -33,12 +33,12 @@ mergeRanges <- function(ranges, overlap = 0) {
 #'
 #' A function to filter the |code{GenoGAMDataSet} by the sum or mean of counts
 #'
-#' @param ggd A |code{GenoGAMDataSet} object
+#' @param ggd A \code{GenoGAMDataSet} object
 #' @param threshold A value for the mean or sum of counts, which will be used to filter on basepair level.
 #' By default it is taken as median + 3*MAD
 #' @param windowsize The sliding window size
 #' @param mode Should the sum or the mean of counts be used?
-#' @return A |code{GRanges} object containing the filtered regions
+#' @return A \code{GRanges} object containing the filtered regions
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @noRd
 compute_filter <- function(ggd, threshold = NULL, windowsize = 201, mode = c("sum", "mean")) {
@@ -103,12 +103,12 @@ compute_filter <- function(ggd, threshold = NULL, windowsize = 201, mode = c("su
 #' A function to filter the |code{GenoGAMDataSet} by the sum or mean of counts to significantly reduce
 #' the amount of models to compute
 #'
-#' @param ggd A |code{GenoGAMDataSet} object
+#' @param ggd A \code{GenoGAMDataSet} object
 #' @param threshold A value for the mean or sum of counts, which will be used to filter on basepair level.
 #' By default it is taken as median + 3*MAD
 #' @param windowsize The sliding window size. Should be an odd value.
 #' @param mode Should the sum or the mean of counts be used?
-#' @return A |code{GenoGAMDataSet} object containing the filtered regions
+#' @return A \code{GenoGAMDataSet} object containing the filtered regions
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @export
 filterData <- function(ggd, threshold = NULL, windowsize = 201, mode = c("sum", "mean")) {
