@@ -181,77 +181,149 @@ GenomicTiles <- function(assays, chunkSize = 1e4, overhangSize = 0, ...) {
 }
 
 
+## #' A function to produce a GRanges index from a list of settings.
+## #'
+## #' @param l A list of settings.
+## #' @return A Granges object of the tiles.
+## .makeTiles <- function(l) {
+
+##     if(length(l) == 0) return(GenomicRanges::GRanges())
+
+##     duplicates <- FALSE
+
+##     ## make chunks
+##     chroms <- width(l$chromosomes)
+##     names(chroms) <- GenomeInfoDb::seqnames(l$chromosomes)
+
+##     ## if regionsa re smaller than requested tileSize
+##     if(any(l$tileSize > chroms)) {
+##         shrink <- min(chroms)/l$tileSize
+##         l$tileSize <- round(l$tileSize * shrink)
+##         l$chunkSize <- round(l$chunkSize * shrink)
+##         l$overhangSize <- round(l$overhangSize * shrink)
+##     }
+
+##     if(any(duplicated(names(chroms)))) {
+##         backupChroms <- l$chromosomes
+##         names(chroms) <- paste(names(chroms), 1:length(chroms), sep = ".")
+##         l$chromosomes <- GenomicRanges::GRanges(names(chroms), ranges(l$chromosomes))
+##         duplicates <- TRUE
+##     }
+    
+##     chunks <- unlist(GenomicRanges::tileGenome(chroms, tilewidth = l$chunkSize,
+##                         cut.last.tile.in.chrom = FALSE))
+##     chunks <- suppressWarnings(IRanges::shift(chunks, width(chunks)/2))
+
+##     ## add overhang and expand to tiles
+##     tiles <- suppressWarnings(trim(flank(chunks, round(l$tileSize/2),
+##                                          both = TRUE)))
+
+##     ## resize start and end tiles till correct tile size is reached
+##     startsToResize <- which(width(tiles) < l$tileSize & start(tiles) == 1)
+##     tiles[startsToResize] <- resize(tiles[startsToResize],
+##                                     width = l$tileSize)
+##     endsToResize <- which(width(tiles) < l$tileSize)
+##     tiles[endsToResize] <- resize(tiles[endsToResize],
+##                                   width = l$tileSize, fix = "end")
+
+##     tiles <- tiles[!duplicated(tiles)]
+
+##     ## if there was a shift such that seqlengths got deleted
+##     if(any(is.na(c(GenomeInfoDb::seqlengths(tiles), GenomeInfoDb::seqlengths(l$chromosomes)))) |
+##        any(GenomeInfoDb::seqlengths(tiles) != GenomeInfoDb::seqlengths(l$chromosomes))) {
+##         GenomeInfoDb::seqlengths(tiles) <- GenomeInfoDb::seqlengths(l$chromosomes)
+##         regions <- splitAsList(l$chromosomes, GenomeInfoDb::seqlevels(l$chromosomes))
+##         tiles <- do.call(c, lapply(GenomeInfoDb::seqlevels(tiles), function(y) {
+##             IRanges::shift(tiles[GenomeInfoDb::seqnames(tiles) == y], start(regions[[y]]) - 1)
+##                           }))
+##     }
+
+##     if(duplicates) {
+##         temp <- strsplit(as.character(GenomeInfoDb::seqnames(tiles)), split = "\\.")
+##         newSeqnames <- sapply(temp, function(y) y[1])
+##         tiles <- GenomicRanges::GRanges(newSeqnames, ranges(tiles))
+##         l$chromosomes <- backupChroms
+##     }
+##     GenomeInfoDb::seqlengths(tiles) <- GenomeInfoDb::seqlengths(l$chromosomes)
+
+##     ## add 'id' and 'dist' column and put settings in metadata
+##     mcols(tiles)$id <- 1:length(tiles)
+##     l$numTiles <- length(tiles)
+##     metadata(tiles) <- l
+##     return(tiles)
+## }
+
 #' A function to produce a GRanges index from a list of settings.
 #'
 #' @param l A list of settings.
-#' @return A Granges object of the tiles.
+#' @return A |code{GRanges} object of the tiles.
 .makeTiles <- function(l) {
 
-    if(length(l) == 0) return(GenomicRanges::GRanges())
+  if(length(l) == 0) return(GenomicRanges::GRanges())
 
-    duplicates <- FALSE
+  lambdaFun <- function(y, sl) {
 
-    ## make chunks
-    chroms <- width(l$chromosomes)
-    names(chroms) <- GenomeInfoDb::seqnames(l$chromosomes)
+    suppressPackageStartupMessages(require(GenoGAM, quietly = TRUE))
 
-    ## if regionsa re smaller than requested tileSize
-    if(any(l$tileSize > chroms)) {
-        shrink <- min(chroms)/l$tileSize
-        l$tileSize <- round(l$tileSize * shrink)
-        l$chunkSize <- round(l$chunkSize * shrink)
-        l$overhangSize <- round(l$overhangSize * shrink)
+    nchunks <- ceiling(width(y)/sl$chunkSize)
+    starts <- start(y) + seq(0, nchunks - 1, length.out = nchunks) * sl$chunkSize
+    ends <- c(start(y) + seq(1, nchunks - 1, length.out = (nchunks - 1)) * sl$chunkSize - 1, end(y))
+    chunks <- GenomicRanges::GRanges(seqnames = seqnames(y), IRanges(starts, ends))
+    if(sl$tileSize == sl$chunkSize) {
+      tiles <- chunks
+    }
+    else {
+      chunks <- suppressWarnings(IRanges::shift(chunks, round(width(chunks)/2)))
+      tiles <- suppressWarnings(trim(flank(chunks, round(sl$tileSize/2),
+                                           both = TRUE)))
     }
 
-    if(any(duplicated(names(chroms)))) {
-        backupChroms <- l$chromosomes
-        names(chroms) <- paste(names(chroms), 1:length(chroms), sep = ".")
-        l$chromosomes <- GenomicRanges::GRanges(names(chroms), ranges(l$chromosomes))
-        duplicates <- TRUE
-    }
-    
-    chunks <- unlist(GenomicRanges::tileGenome(chroms, tilewidth = l$chunkSize,
-                        cut.last.tile.in.chrom = FALSE))
-    chunks <- suppressWarnings(IRanges::shift(chunks, width(chunks)/2))
+    ## adjust first tile
+    startsToResize <- which(start(tiles) < start(y))
+    end(tiles[startsToResize]) <- min(end(tiles[startsToResize]) + start(y) - start(tiles[startsToResize]), end(y))
+    start(tiles[startsToResize]) <- start(y)
 
-    ## add overhang and expand to tiles
-    tiles <- suppressWarnings(trim(flank(chunks, round(l$tileSize/2),
-                                         both = TRUE)))
+    ## adjust last tile
+    endsToResize <- which(end(tiles) > end(y))
+    start(tiles[endsToResize]) <- max(start(tiles[endsToResize]) - end(tiles[endsToResize]) + end(y), start(y))
+    end(tiles[endsToResize]) <- end(y)
 
-    ## resize start and end tiles till correct tile size is reached
-    startsToResize <- which(width(tiles) < l$tileSize & start(tiles) == 1)
-    tiles[startsToResize] <- resize(tiles[startsToResize],
-                                    width = l$tileSize)
-    endsToResize <- which(width(tiles) < l$tileSize)
-    tiles[endsToResize] <- resize(tiles[endsToResize],
-                                  width = l$tileSize, fix = "end")
-
-    tiles <- tiles[!duplicated(tiles)]
-
-    ## if there was a shift such that seqlengths got deleted
-    if(any(is.na(c(GenomeInfoDb::seqlengths(tiles), GenomeInfoDb::seqlengths(l$chromosomes)))) |
-       any(GenomeInfoDb::seqlengths(tiles) != GenomeInfoDb::seqlengths(l$chromosomes))) {
-        GenomeInfoDb::seqlengths(tiles) <- GenomeInfoDb::seqlengths(l$chromosomes)
-        regions <- splitAsList(l$chromosomes, GenomeInfoDb::seqlevels(l$chromosomes))
-        tiles <- do.call(c, lapply(GenomeInfoDb::seqlevels(tiles), function(y) {
-            IRanges::shift(tiles[GenomeInfoDb::seqnames(tiles) == y], start(regions[[y]]) - 1)
-                          }))
-    }
-
-    if(duplicates) {
-        temp <- strsplit(as.character(GenomeInfoDb::seqnames(tiles)), split = "\\.")
-        newSeqnames <- sapply(temp, function(y) y[1])
-        tiles <- GenomicRanges::GRanges(newSeqnames, ranges(tiles))
-        l$chromosomes <- backupChroms
-    }
-    GenomeInfoDb::seqlengths(tiles) <- GenomeInfoDb::seqlengths(l$chromosomes)
-
-    ## add 'id' and 'dist' column and put settings in metadata
-    mcols(tiles)$id <- 1:length(tiles)
-    l$numTiles <- length(tiles)
-    metadata(tiles) <- l
+    ## remove duplicate tiles if present
+    tiles <- unique(tiles)
     return(tiles)
+  }
+
+  tileList <- BiocParallel::bplapply(l$chromosomes, lambdaFun, sl = l)
+
+  tiles <- do.call("c", tileList)
+  seqlengths(tiles) <- seqlengths(l$chromosomes)
+  seqlevels(tiles, force = TRUE) <- seqlevelsInUse(tiles)
+  
+  ## add 'id' and 'dist' column and put settings in metadata
+  mcols(tiles)$id <- 1:length(tiles)
+  l$numTiles <- length(tiles)
+  metadata(tiles) <- l
+  return(tiles)
 }
+
+## #' A function to produce the row coordinates from GPos object.
+## #' 
+## #' @param gp A GPos object.
+## #' @return A GRanges object of the row coordinates.
+## .makeCoordinates <- function(gp) {
+##     gpCoords <- gp@pos_runs
+##     chroms <- seqlevels(gpCoords)
+##     if(length(gpCoords) > 0) {
+##         widths <- sapply(chroms, function(y) sum(width(gpCoords[seqnames(gpCoords) == y,])))
+##         ir <- IRanges(start = cumsum(c(1, widths[-length(widths)])),
+##                       end = cumsum(widths))
+##     }
+##     else {
+##         ir <- IRanges()
+##     }
+##     coords <- GenomicRanges::GRanges(chroms, ir)
+##     return(coords)
+## }
 
 #' A function to produce the row coordinates from GPos object.
 #' 
@@ -259,16 +331,17 @@ GenomicTiles <- function(assays, chunkSize = 1e4, overhangSize = 0, ...) {
 #' @return A GRanges object of the row coordinates.
 .makeCoordinates <- function(gp) {
     gpCoords <- gp@pos_runs
-    chroms <- seqlevels(gpCoords)
+    chroms <- seqnames(gpCoords)
     if(length(gpCoords) > 0) {
-        widths <- sapply(chroms, function(y) sum(width(gpCoords[seqnames(gpCoords) == y,])))
+        widths <- width(gpCoords)
         ir <- IRanges(start = cumsum(c(1, widths[-length(widths)])),
                       end = cumsum(widths))
     }
     else {
         ir <- IRanges()
     }
-    coords <- GenomicRanges::GRanges(GenomeInfoDb::seqnames(gpCoords), ir)
+    coords <- GenomicRanges::GRanges(chroms, ir)
+    coords$block <- 1:length(coords)
     return(coords)
 }
 
@@ -281,7 +354,7 @@ GenomicTiles <- function(assays, chunkSize = 1e4, overhangSize = 0, ...) {
 makeTestGenomicTiles <- function() {
     gp <- GenomicRanges::GPos(GenomicRanges::GRanges(c("chrI", "chrII"), IRanges::IRanges(c(1,1), c(50,50))))
     df <- DataFrame(a = 1:100, b = 101:200)
-    gt2 <- GenomicTiles(assays = list(df), chunkSize = 15, rowRanges = gp)
+    gt2 <- GenomicTiles(assays = list(df), chunkSize = 15, rowRanges = gp, overhangSize = 2)
     return(gt2)
 }
 
@@ -335,24 +408,29 @@ setGeneric("getChunkIndex", function(object, ...) standardGeneric("getChunkIndex
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @export
 setMethod("getChunkIndex", "GenomicTiles", function(object, id = NULL) {
-    indx <- getIndex(object)
-    if(length(indx) == 0) return(indx)
+  index <- getIndex(object)
+  if(length(index) == 0) return(index)
+  rowCoords <- getCoordinates(object)
+  gpCoords <- slot(rowRanges(object), "pos_runs")
+  GenomeInfoDb::seqlengths(index) <- rep(NA, length(GenomeInfoDb::seqlengths(index)))
+  index$block <- subjectHits(findOverlaps(index, gpCoords))
     
-    splitIndx <- split(indx, GenomeInfoDb::seqnames(indx))
-    
-    chunkIndex <- lapply(splitIndx, function(y) {
-        start <- c(start(y[1]), (end(y[-length(y)]) + start(y[-1]))/2)
-        end <- c((end(y[-length(y)]) + start(y[-1]))/2 - 1, end(y[length(y)]))
-        start(y) <- start
-        end(y) <- end
-        return(y)
-    })
+  splitIndx <- split(index, index$block)    
+  
+  chunkIndex <- lapply(splitIndx, function(y) {
+    start <- c(start(y[1]), ceiling((end(y[-length(y)]) + start(y[-1]))/2))
+    end <- c(ceiling((end(y[-length(y)]) + start(y[-1]))/2 - 1), end(y[length(y)]))
+    start(y) <- start
+    end(y) <- end
+    return(y)
+  })
 
-    res <- do.call(c, unname(chunkIndex))
-    metadata(res) <- metadata(indx)
-
-    if(!is.null(id)) res <- res[mcols(res)$id %in% id]
-    return(res)
+  res <- do.call(c, unname(chunkIndex))
+  res$block <- NULL
+  metadata(res) <- metadata(index)
+  
+  if(!is.null(id)) res <- res[mcols(res)$id %in% id]
+  return(res)
 })
 
 #' @rdname untile
@@ -449,18 +527,24 @@ setMethod("getIndexCoordinates", "GenomicTiles", function(object, id = NULL, ind
     if(is.null(index)) {
         index <- getIndex(object)
     }
-    chromosomes <- GenomeInfoDb::seqlevels(index)
     rowCoords <- getCoordinates(object)
+    gpCoords <- slot(rowRanges(object), "pos_runs")
     GenomeInfoDb::seqlengths(index) <- rep(NA, length(GenomeInfoDb::seqlengths(index)))
-    
-    for(chr in chromosomes) {
-        start <- min(start(index[GenomeInfoDb::seqnames(index) == chr]))
-        index[GenomeInfoDb::seqnames(index) == chr] <- shift(index[GenomeInfoDb::seqnames(index) == chr],
-                         start(rowCoords[GenomeInfoDb::seqnames(rowCoords) == chr]) - start)
-    }
+    index$block <- subjectHits(findOverlaps(index, gpCoords))
 
-    if(!is.null(id)) index <- index[mcols(index)$id %in% id]
-    return(index)
+    splitIndx <- split(index, index$block)
+
+    coords <- lapply(1:length(splitIndx), function(y) {
+        temp <- splitIndx[[y]]
+        start <- min(start(temp))
+        temp <- shift(temp, start(rowCoords[rowCoords$block == y,]) - start)
+        return(temp)
+    })
+
+    res <- do.call(c, unname(coords))
+    if(!is.null(id)) res <- index[mcols(res)$id %in% id]
+    res$block <- NULL
+    return(res)
 })
 
 #' @rdname dataRange
@@ -867,6 +951,7 @@ setMethod("as.data.frame", "GenomicTiles", function(x) {
     l$chromosomes <- gpCoords
     
     indx <- .makeTiles(l)
+    coords <- .makeCoordinates(GPos(coords))
     GenomeInfoDb::seqinfo(indx) <- GenomeInfoDb::seqinfo(gpCoords)
     GenomeInfoDb::seqlevels(coords) <- GenomeInfoDb::seqlevels(coords)[GenomeInfoDb::seqlevels(coords) %in%
                                            unique(GenomeInfoDb::seqnames(coords))]
@@ -968,8 +1053,10 @@ setMethod("subset", "GenomicTiles", function(x, ...) {
 
     se <- subsetByOverlaps(SummarizedExperiment(assay, rowRanges = rowRanges, colData = colData),
                            subject, ...)
-    tiles <- .makeTiles(settings)
     GenomeInfoDb::seqlevels(rowRanges(se), force = TRUE) <- GenomeInfoDb::seqlevelsInUse(rowRanges(se))
+    
+    settings$chromosomes <- slot(rowRanges(se), "pos_runs")
+    tiles <- .makeTiles(settings)
     GenomeInfoDb::seqlevels(tiles, force = TRUE) <- GenomeInfoDb::seqlevelsInUse(rowRanges(se))
     if(length(metadata(tiles)) > 0) {
         GenomeInfoDb::seqlevels(metadata(tiles)$chromosomes, force = TRUE) <- GenomeInfoDb::seqlevelsInUse(tiles)
@@ -1075,8 +1162,8 @@ setMethod("subsetByOverlaps", c("GenomicTiles", "GRanges"),
                       ceiling(seq_along(mcols(index)$id)/blockSize)))
     
     dfList <- do.call(c, bplapply(blockList, function(y) {
-        require(GenoGAM, quietly = TRUE)
-        blockindx <- index[mcols(index)$id == y]
+        suppressPackageStartupMessages(require(GenoGAM, quietly = TRUE))
+        blockindx <- index[match(y, index$id),]
         subgt <- .subsetByOverlaps(gt, blockindx)
         df <- DataFrame(subgt)
         coords <- unlistCoordinates(subgt,
@@ -1089,7 +1176,7 @@ setMethod("subsetByOverlaps", c("GenomicTiles", "GRanges"),
     return(dfList)
 }
 
-.extractGenomicTilesByIndex <- function(gt, index, size = 3e7) {
+.extractGenomicTilesByIndex <- function(gt, index, size = 3e9) {
     chromosomes <- GenomeInfoDb::seqlevels(index)
     gtDims <- dim(gt)
     if(all(gtDims == c(0, 0))) return(DataFrameList())
@@ -1120,7 +1207,7 @@ setMethod("subsetByOverlaps", c("GenomicTiles", "GRanges"),
                        pos >= start(range) & pos <= end(range))
 
     df <- DataFrame(gtSubset)
-    names(df)[1] <- "chromosome"
+    ##names(df)[1] <- "chromosome"
     ## df <- melt(df, measure.vars = rownames(colData(gtSubset)), variable.name = "sample")
     return(DataFrameList(df))
 }
@@ -1147,7 +1234,7 @@ setGeneric("getTile", function(object, id, ...) standardGeneric("getTile"))
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @rdname getTile
 #' @export
-setMethod("getTile", "GenomicTiles", function(object, id, size = 3e7) {
+setMethod("getTile", "GenomicTiles", function(object, id, size = 3e9) {
     if(missing(id)) {
         indx <- getIndex(object)
         id <- mcols(indx)$id

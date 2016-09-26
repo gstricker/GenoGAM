@@ -54,7 +54,7 @@
 #' The rownames of colData should comply with the sample names in the config data.frame.
 #' @param experimentMatrix A matrix object representing the experiment design.
 #' @return A melted data.frame with additional columns.
-#' @author Georg Stricker \email{stricker@@genzentrum.lmu.de}
+#' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 .meltGTile <- function(gtiles, experimentDesign, sf, formula) {
     res <- lapply(gtiles, function(gt) {
 
@@ -83,3 +83,4 @@
     names(res) <- names(gtiles)
     return(res)
 }
+    

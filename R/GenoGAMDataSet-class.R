@@ -134,7 +134,7 @@ setValidity2("GenoGAMDataSet", .validateGenoGAMDataSet)
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @export
 GenoGAMDataSet <- function(experimentDesign, chunkSize, overhangSize, design,
-                          directory = ".", ...) {
+                           directory = ".", settings = NULL, ...) {
 
     if(missing(experimentDesign)) {
         gt <- GenomicTiles()
@@ -146,7 +146,7 @@ GenoGAMDataSet <- function(experimentDesign, chunkSize, overhangSize, design,
                                     chunkSize = chunkSize,
                                     overhangSize = overhangSize,
                                     design = design,
-                                    settings = NULL, ...)
+                                    settings = settings, ...)
     }
     else {
         gt <- .GenoGAMDataSetFromConfig(config = experimentDesign,
@@ -154,7 +154,7 @@ GenoGAMDataSet <- function(experimentDesign, chunkSize, overhangSize, design,
                                         overhangSize = overhangSize,
                                         design = design,
                                         directory = directory,
-                                        settings = NULL, ...)
+                                        settings = settings, ...)
     }
     
     return(gt)
@@ -466,6 +466,27 @@ setMethod("subsetByOverlaps", c("GenoGAMDataSet", "GRanges"),
                          design = design, sizeFactors = sf)
               return(gtd)
           })
+
+#' Subsetting by GRanges
+#'
+#' Providing subsetting by GRanges through the single-bracket operator
+#'
+#' @param x A \code{GenoGAMDataSet} object
+#' @param i A \code{GRanges} object
+#' @return A subsetted \code{GenoGAMDataSet} object
+#' @rdname GenoGAMDataSet-brackets
+setMethod("[", c("GenoGAMDataSet", "GRanges"), function(x, i) {
+    settings <- getSettings(x)
+    design <- design(x)
+    sf <- sizeFactors(x)
+    subgt <- .exactSubsetByOverlaps(x, i)
+    settings <- setDefaults(settings, chromosomeList = GenomeInfoDb::seqlevels(subgt))
+              
+    gtd <- new("GenoGAMDataSet", subgt, settings = settings,
+               design = design, sizeFactors = sf)
+    return(gtd)
+})
+    
 
 ## Silent methods
 ## ==============

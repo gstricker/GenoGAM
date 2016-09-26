@@ -70,21 +70,25 @@
     }
     
     chunkGRanges <- .chunkBAM(starts, ends, chunkSize)
+
+  lambdaFun <- function(ii, grChunk, asMates, path, indexFile, params, processFUN, args) {
+    suppressPackageStartupMessages(require(GenoGAM, quietly = TRUE))
+    Rsamtools::bamWhich(params) <- grChunk[ii,]
+    if (asMates) reads <- GenomicAlignments::readGAlignmentPairs(path, index = indexFile, param = params)
+    else reads <- GenomicAlignments::readGAlignments(path, index = indexFile, param = params)
+    
+    if(length(reads) == 0L) return(NULL)
+    
+    args$coords <- grChunk[ii,]
+    ans <- do.call(processFUN, c(list(reads), args))
+    return(ans)
+  }
     
     # run BAM reading in parallel. Check backend by bpparam().
-    res <- bplapply(1:length(chunkGRanges), function(ii) {
-        require(GenoGAM, quietly = TRUE)
-        Rsamtools::bamWhich(params) <- chunkGRanges[ii]
-        if (asMates) reads <- GenomicAlignments::readGAlignmentPairs(path, index = indexFile, param = params)
-        else reads <- GenomicAlignments::readGAlignments(path, index = indexFile, param = params)
-
-        if(length(reads) == 0L) return(NULL)
-
-        args$coords <- chunkGRanges[ii]
-        ans <- do.call(processFUN, c(list(reads), args))
-        return(ans)
-    })
-    
+  res <- BiocParallel::bplapply(1:length(chunkGRanges), lambdaFun, grChunk = chunkGRanges, asMates = asMates, 
+                    path = path, indexFile = indexFile, params = params, 
+                    processFUN = processFUN, args = args)
+  
     attr(res,"chunkId") <- chunkGRanges
     return(res)
 }
@@ -92,11 +96,13 @@
 .chunkBAM <- function(starts, stops, chunkSize) {
     lengths <- stops - starts + 1
     chunks <- ceiling(lengths/chunkSize)
+    
 
     start <- sapply(1:length(starts), function(ii) {
         if(chunks[ii] <= 1) return(starts[ii])
         else {
             cutPoints <- as.integer(seq(from = starts[ii] - 1, to = stops[ii], length.out = chunks[ii] + 1))
+            names(cutPoints) <- rep(names(starts)[ii], length(cutPoints))
             return(cutPoints[-length(cutPoints)] + 1)
         }
     })
@@ -105,6 +111,7 @@
         if(chunks[ii] <= 1) return(stops[ii])
         else {
             cutPoints <- as.integer(seq(from = starts[ii] - 1, to = stops[ii], length.out = chunks[ii] + 1))
+            names(cutPoints) <- rep(names(starts)[ii], length(cutPoints))
             return(cutPoints[-1])
         }
     })
@@ -142,8 +149,7 @@
     if(is.null(obj)) return(NULL)
 
     id <- attr(obj,"chunkId")
-    chroms <- GenomeInfoDb::seqlevelsInUse(id)
-    chromsList <- splitAsList(id, chroms)
+    chromsList <- split(id, seqnames(id))
     
     res <- lapply(chromsList, function(x) {
         Rle(rep(init, sum(width(x))))
@@ -182,7 +188,7 @@
         }
     }
     
-    totalLen <- suppressWarnings(sum(elementNROWS(res)))
+    totalLen <- suppressWarnings(sum(elementLengths(res)))
     if(is.na(totalLen) | totalLen > 2^32) return(RleList(res, compress = FALSE))
     else return(RleList(res))
 }

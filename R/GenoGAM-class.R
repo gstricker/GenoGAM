@@ -30,12 +30,12 @@ NULL
 #' @exportClass GenoGAM
 setClass("GenoGAM",
          slots = list(design = "formula", fits = "data.frame",
-             positions = "GPos", smooths = "data.frame",
+             positions = "GPos", smooths = "list", vcov = "list",
              experimentDesign = "matrix", fitparams = "numeric",
              family = "ANY", cvparams = "numeric",
              settings = "GenoGAMSettings", tileSettings = "list"),
          prototype = prototype(design = ~ 1, fits = data.frame(),
-             positions = GPos(), smooths = data.frame(),
+             positions = GPos(), smooths = list(), vcov = list(),
              experimentDesign = matrix(), fitparams = numeric(), family = mgcv::nb(),
              cvparams = numeric(), settings = GenoGAMSettings(),
              tileSettings = list()))
@@ -66,8 +66,15 @@ setClass("GenoGAM",
 }
 
 .validateSmoothsType <- function(object) {
-    if(class(slot(object, "smooths")) != "data.frame") {
-        return("'smooths' must be a data.frame object")
+    if(class(slot(object, "smooths")) != "list") {
+        return("'smooths' must be a list object")
+    }
+    NULL
+}
+
+.validateVCovType <- function(object) {
+    if(class(slot(object, "vcov")) != "list") {
+        return("'vcov' must be a list object")
     }
     NULL
 }
@@ -113,7 +120,7 @@ setClass("GenoGAM",
       .validatePositionsType(object), .validateSmoothsType(object),
       .validateExpDesignType(object), .validateFitParamsType(object),
       .validateCVParamsType(object), .validateSettingsType(object),
-      .validateTileSettingsType(object))
+      .validateTileSettingsType(object), .validateVCovType(object))
 }
 
 setValidity2("GenoGAM", .validateGenoGAM)
@@ -140,13 +147,57 @@ setValidity2("GenoGAM", .validateGenoGAM)
 #' The positions slot holds the positions of the fits as a |code{GPos} object
 #'
 #' @rdname GenoGAM-methods
-#' @param x A \code{GenoGAM} object.
-#' @return A \code{GPos} object representing the positions
+#' @param object A GenoGAM object.
+#' @return A GPos object representing the positions
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @export
 setMethod("rowRanges", "GenoGAM", function(x) {
     x@positions
 })
+
+#' Accessor to the 'design' slot
+#'
+#' The 'design' slot holds the formula of the fit
+#'
+#' @rdname GenoGAM-methods
+#' @param object A formula object.
+#' @return The formula of the fit
+#' @author Georg Stricker \email{georg.stricker@@in.tum.de}
+#' @export
+setMethod("design", "GenoGAM", function(object) {
+    object@design
+})
+
+#' @rdname GenoGAM-methods
+#' @export
+setGeneric("getFits", function(object) standardGeneric("getFits"))
+
+#' Accessor to 'fits' slot
+#'
+#' The 'fits' slot contains the fitted values of the model
+#'
+#' @param object A GenoGAM object
+#' @return A data.frame of the fits
+#' @examples
+#' gg <- makeTestGenoGAM()
+#' fits <- getFits(gg)
+#' @rdname GenoGAM-methods
+#' @export
+setMethod("getFits", "GenoGAM", function(object) object@fits)
+
+#' Accessor to the 'experimentDesign' slot
+#'
+#' The 'experimentDesign' slot contains the experimental design of the model as
+#' specified in the config file
+#'
+#' @param object A GenoGAM object
+#' @return A named matrix
+#' @examples
+#' gg <- makeTestGenoGAM()
+#' fits <- colData(gg)
+#' @rdname GenoGAM-methods
+#' @export
+setMethod("colData", "GenoGAM", function(x) x@experimentDesign)
 
 ## Cosmetics
 ## ==========
@@ -212,31 +263,15 @@ setMethod("summary", "GenoGAM", function(object) {
 makeTestGenoGAM <- function() {
     gg <- .GenoGAM()
     gp <- GenomicRanges::GPos(GenomicRanges::GRanges("chrI", IRanges::IRanges(1, 100)))
-    fits <- data.frame("s(x)" = runif(100), "s(x):type" = runif(100))
+    fits <- data.frame(runif(100), runif(100), runif(100), runif(100))
+    names(fits) <- c("s(x)", "s(x)::type", "se.s(x)", "se.s(x)::type")
     slot(gg, "positions") <- gp
     slot(gg, "fits") <- fits
     return(gg)
 }
 
-#' @rdname getFits
-#' @export
-setGeneric("getFits", function(object) standardGeneric("getFits"))
-
-#' Accessor to \code{fits} slot
-#'
-#' The \code{fits} slot contains the fitted values of the model
-#'
-#' @param object A \code{GenomicTiles} object
-#' @return A data.frame of the fits
-#' @examples
-#' gg <- makeTestGenoGAM()
-#' fits <- getFits(gg)
-#' @rdname getFits
-#' @export
-setMethod("getFits", "GenoGAM", function(object) object@fits)
-
 .subsetByRanges <- function(gg, ranges) {
-    pos <- slot(gg, "positions")
+    pos <- rowRanges(gg)
     ov <- findOverlaps(pos, ranges)
     indx <- queryHits(ov)
     slot(gg, "positions") <- pos[indx,]
@@ -373,13 +408,34 @@ setMethod("view", "GenoGAM", function(object, ranges = NULL, seqnames = NULL,
 #'
 #' @param gg A fitted GenoGAM object.
 #' @param log.p Should pvalues be returned in log scale?
-#' @return A GenoGAm object which fits has been updated by the pvalue columns.
+#' @return A GenoGAM object which fits has been updated by the pvalue columns.
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @export
 computeSignificance <- function(gg, log.p = FALSE) {
     .result(gg, log.p = log.p)
 }
 
+plot.GenoGAM <- function(object, ranges = NULL, seqnames = NULL,
+                         start = NULL, end = NULL, scale = TRUE,
+                         pages = 1, select = NULL) {
+    base <- TRUE
+    if(require(ggplot2)) {
+        base <- FALSE
+    }
+    sub <- view(ranges = ranges, seqnames = seqnames,
+                start = start, end = end)
+    if(is.null(select)) {
+        select <- c("s(x)", paste("s(x)", colnames(design(object)), sep = ":"))
+    }
+    else {
+        select <- paste("s(x)", select, sep = ":")
+    }
+
+    if(base) {
+        plot_base(sub, scale = scale, pages = pages,
+                  select = select)
+    }
+}
 
 ## #' Prediction from fitted GenoGAM
 ## #'

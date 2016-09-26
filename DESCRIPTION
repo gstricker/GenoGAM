@@ -1,7 +1,7 @@
 Package: GenoGAM
 Type: Package
 Title: A GAM based framework for analysis of ChIP-Seq data
-Version: 1.1.4
+Version: 1.1.1
 Date: 2016-03-13
 Authors@R: c(person("Georg", "Stricker", role = c("aut", "cre"), email
         = "georg.stricker@in.tum.de"), person("Alexander",
@@ -36,10 +36,13 @@ Imports:
     IRanges (>= 2.5.30),
     mgcv (>= 1.8),
     reshape2 (>= 1.4.1),
-    S4Vectors (>= 0.9.34)
+    S4Vectors (>= 0.9.34),
+    Biostrings (>= 2.39.14)
 Suggests:
     BiocStyle,
     chipseq (>= 1.21.2),
+    LSD (>= 3.0.0),
+    genefilter (>= 1.54.2),
     testthat,
     knitr
 VignetteBuilder: knitr
@@ -54,9 +57,14 @@ Collate:
     'GenoGAM-package.R'
     'GenoGAMDataSet-class.R'
     'cv.R'
+    'devel.R'
     'diffBinding.R'
+    'filter.R'
     'genogam.R'
     'helper.R'
+    'peakCalling.R'
+    'plotting.R'
+    'qc.R'
     'readData.R'
     'sf.R'
 URL: https://github.com/gstricker/GenoGAM
