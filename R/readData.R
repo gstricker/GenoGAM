@@ -71,22 +71,22 @@
     
     chunkGRanges <- .chunkBAM(starts, ends, chunkSize)
 
-  lambdaFun <- function(grChunk, asMates, indexFile, params, processFUN, args) {
-    require(GenoGAM, quietly = TRUE)
-    Rsamtools::bamWhich(params) <- grChunk
+  lambdaFun <- function(ii, grChunk, asMates, path, indexFile, params, processFUN, args) {
+    suppressPackageStartupMessages(require(GenoGAM, quietly = TRUE))
+    Rsamtools::bamWhich(params) <- grChunk[ii,]
     if (asMates) reads <- GenomicAlignments::readGAlignmentPairs(path, index = indexFile, param = params)
     else reads <- GenomicAlignments::readGAlignments(path, index = indexFile, param = params)
     
     if(length(reads) == 0L) return(NULL)
     
-    args$coords <- grChunk
+    args$coords <- grChunk[ii,]
     ans <- do.call(processFUN, c(list(reads), args))
     return(ans)
   }
     
     # run BAM reading in parallel. Check backend by bpparam().
-    res <- bplapply(chunkGRanges, lambdaFun, asMates = asMates, 
-                    indexFile = indexFile, params = params, 
+  res <- BiocParallel::bplapply(1:length(chunkGRanges), lambdaFun, grChunk = chunkGRanges, asMates = asMates, 
+                    path = path, indexFile = indexFile, params = params, 
                     processFUN = processFUN, args = args)
   
     attr(res,"chunkId") <- chunkGRanges

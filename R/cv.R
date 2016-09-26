@@ -68,7 +68,7 @@
 
     lambdaFun <- function(iter, ids, gtiles, CV_intervals, formula, 
                           fixedpars) {
-        require(GenoGAM, quietly = TRUE)
+        suppressPackageStartupMessages(require(GenoGAM, quietly = TRUE))
         id <- ids[iter,]
         
         testset <- gtiles[[id$tiles]][CV_intervals[[id$folds]],]

@@ -168,7 +168,7 @@ genogam <- function(ggd, lambda = NULL, family = mgcv::nb(),
   
   lambdaFun <- function(data, colData, sf, formula, family, lambdas, 
                         chunkIndex) {
-    require(GenoGAM, quietly = TRUE)
+    suppressPackageStartupMessages(require(GenoGAM, quietly = TRUE))
     id <- runValue(data$id)
     df <- .meltGTile(list(data), colData, sf, formula)
     mod <- mgcv::gam(formula, df[[1]], family = family, sp = lambdas)

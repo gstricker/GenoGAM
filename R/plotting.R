@@ -16,8 +16,10 @@
 
 plot.GenoGAM <- function(fit, ggd = NULL, ranges = NULL, seqnames = NULL,
                       start = NULL, end = NULL, scale = TRUE) {
-    ## Cap for too long regions
+  ## Cap for too long regions
   cap <- 1e5
+  loc <- rowRanges(fit)
+  indx <- 1:length(loc)
 
   if(is.null(seqnames) & is.null(start) & is.null(end) & is.null(ranges)) {
     sub <- fit
@@ -26,7 +28,6 @@ plot.GenoGAM <- function(fit, ggd = NULL, ranges = NULL, seqnames = NULL,
     }
   }
   else {
-    loc <- rowRanges(fit)
     
     if(!is.null(ranges)) {
       ov <- findOverlaps(loc, ranges)
@@ -57,6 +58,7 @@ plot.GenoGAM <- function(fit, ggd = NULL, ranges = NULL, seqnames = NULL,
   inputData <- NULL ## the raw data, not present by default
   if(!is.null(ggd)) {
     inputData <- assay(ggd)[indx,]
+    inputData[] <- lapply(names(inputData), function(y) inputData[[y]]/exp(sizeFactors(ggd)[y]))
   }
   title <- as.character(loc[indx]@pos_runs)
 
@@ -66,8 +68,9 @@ plot.GenoGAM <- function(fit, ggd = NULL, ranges = NULL, seqnames = NULL,
   if(require(ggplot2) & require(grid)) {
     plot_ggplot2(x = x, y = y, inputData = inputData, scale = scale, title = title)
   }
-  
-  plot_base(x = x, y = y, inputData = inputData, scale = scale, title = title)
+  else {
+    plot_base(x = x, y = y, inputData = inputData, scale = scale, title = title)
+  }
 }
 
 #' @noRd
@@ -75,7 +78,8 @@ plot_ggplot2 <- function(x, y, inputData = NULL, scale = TRUE, title = "") {
   numTracks <- ncol(y)/2
 
   seCols <- grep("se", names(y))
-  sCols <- (1:ncol(y))[-seCols]
+  pCols <- grep("pvalue", names(y))
+  sCols <- (1:ncol(y))[-c(seCols, pCols)]
   
   ## compute confidence interval
   for(ii in seCols) {
@@ -84,17 +88,20 @@ plot_ggplot2 <- function(x, y, inputData = NULL, scale = TRUE, title = "") {
     
     uname <- paste("upper", scolname, sep = ".")
     lname <- paste("lower", scolname, sep = ".")
-    y[[uname]] <- exp(y[[scolname]] + 1.96*y[[secolname]])
-    y[[lname]] <- exp(y[[scolname]] - 1.96*y[[secolname]])
+    y[[uname]] <- y[[scolname]] + 1.96*y[[secolname]]
+    y[[lname]] <- y[[scolname]] - 1.96*y[[secolname]]
   }
   
   ## compute ylim
-  ylim <- NULL
+  fit_ylim <- NULL
+  input_ylim <- NULL
+
   if(scale) {
-    ylim <- c(max(min(y), 0), max(y))
+    upperCols <- grep("upper.s\\(x\\)", names(y))
+    lowerCols <- grep("lower.s\\(x\\)", names(y))
+    fit_ylim <- c(min(y[,lowerCols]), max(y[,upperCols]))
     if(!is.null(inputData)) {
-      ylim <- c(min(ylim, sapply(inputData, min)), 
-                max(ylim, sapply(inputData, max)))
+      input_ylim <- c(min(sapply(inputData, min)), max(max(sapply(inputData, max))))
     }
   }
     
@@ -115,12 +122,12 @@ plot_ggplot2 <- function(x, y, inputData = NULL, scale = TRUE, title = "") {
   if(!is.null(inputData)) {
     for (ii in 1:ncol(inputData)) {
       inputName <- names(inputData)[ii]
-      if(is.null(ylim)) {
-        ylim <- range(y[[inputName]])
+      if(is.null(input_ylim)) {
+        input_ylim <- range(y[[inputName]])
       }
       assign(paste0("yinput", idx), y[[inputName]])
       plotList[[idx]] <- ggplot(y, aes(x = x, y = get(paste0("yinput", idx)))) + 
-        geom_point(color = "#73737330") + ylim(ylim) + ylab(inputName) + xlab("")
+        geom_point(color = "#73737330") + ylim(input_ylim) + ylab(inputName) + xlab("")
       idx <- idx + 1
     }
   }
@@ -138,17 +145,18 @@ plot_ggplot2 <- function(x, y, inputData = NULL, scale = TRUE, title = "") {
     }
     ## if no ylim provided make sure that confidence intervalls are included
     if(!scale) {
-      ylim <- c(min(y[[paste("lower", track, sep = ".")]]),
+      fit_ylim <- c(min(y[[paste("lower", track, sep = ".")]]),
                 max(y[[paste("upper", track, sep = ".")]]))
     }
     
-    assign(paste0("yinput", idx), exp(y[[track]]))
+    assign(paste0("yinput", idx), y[[track]])
     assign(paste0("lower", idx), y[[paste("lower", track, sep = ".")]]) 
     assign(paste0("upper", idx), y[[paste("upper", track, sep = ".")]]) 
     plotList[[idx]] <- ggplot(y, aes(x, get(paste0("yinput", idx)))) + 
       geom_ribbon(aes(ymin = get(paste0("lower", idx)),
                       ymax = get(paste0("upper", idx))), fill = "grey70") + 
-      geom_line() + ylim(ylim) + ylab(track) + xlab(xlab)
+      geom_line() + ylim(fit_ylim) + ylab(track) + xlab(xlab) +
+      geom_hline(yintercept = 0, colour = "red")
     idx <- idx + 1
   }
 
@@ -176,31 +184,43 @@ plot_base <- function(x, y, inputData = NULL, scale = TRUE, title = "") {
     
     uname <- paste("upper", scolname, sep = ".")
     lname <- paste("lower", scolname, sep = ".")
-    y[[uname]] <- exp(y[[scolname]] + 1.96*y[[secolname]])
-    y[[lname]] <- exp(y[[scolname]] - 1.96*y[[secolname]])
+    y[[uname]] <- y[[scolname]] + 1.96*y[[secolname]]
+    y[[lname]] <- y[[scolname]] - 1.96*y[[secolname]]
   }
 
   ## compute ylims
-  ylim <- NULL
+  fit_ylim <- NULL
+  input_ylim <- NULL
+  
   if(scale) {
-    ylim <- c(max(min(y), 0), max(y))
+    upperCols <- grep("upper.s\\(x\\)", names(y))
+    lowerCols <- grep("lower.s\\(x\\)", names(y))
+    fit_ylim <- c(min(y[,lowerCols]), max(y[,upperCols]))
     if(!is.null(inputData)) {
-      ylim <- c(min(ylim, sapply(inputData, min)), max(ylim, sapply(inputData, max)))
+      input_ylim <- c(min(sapply(inputData, min)), max(max(sapply(inputData, max))))
     }
   }
     
   if(!is.null(inputData)) {
     numTracks <- numTracks + ncol(inputData)
   }
-  par(mfrow = c(numTracks, 1), oma = c(0, 0, 2, 0))
+
+  if(numTracks > 5) {
+    par(mfrow = c(numTracks%/%2, numTracks%/%2 + numTracks%%2), oma = c(0, 0, 2, 0))
+    xlab <- "genomic position"
+  }
+  else {
+    par(mfrow = c(numTracks, 1), oma = c(0, 0, 2, 0))
+    xlab <- ""
+  }
   ## set penalty against scientific numbers
   opt <- options("scipen" = 100000)
 
   ## plot raw counts
   if(!is.null(inputData)) {
     for (ii in 1:ncol(inputData)) {
-      plot(x, inputData[,ii], type = "p", col = "#73737330", pch = 19, 
-           ylim = ylim, xlab = "", ylab = names(inputData)[ii])
+      plot(x, as.vector(inputData[,ii]), type = "p", col = "#73737330", pch = 19, 
+           ylim = input_ylim, xlab = xlab, ylab = names(inputData)[ii])
     }
   }
 
@@ -212,19 +232,17 @@ plot_base <- function(x, y, inputData = NULL, scale = TRUE, title = "") {
     if(ii == sCols[length(sCols)]) {
       xlab <- "genomic position"
     }
-    else {
-      xlab <- ""
-    }
     ## if no ylim provided make sure that confidence intervalls are included
     if(!scale) {
-      ylim <- c(min(y[[paste("lower", track, sep = ".")]]),
+      fit_ylim <- c(min(y[[paste("lower", track, sep = ".")]]),
                 max(y[[paste("upper", track, sep = ".")]]))
     }
 
-    plot(x, exp(y[,ii]), type = "l", col = 'black', ylim = ylim, xlab = xlab, 
+    plot(x, y[,ii], type = "l", col = 'black', ylim = fit_ylim, xlab = xlab, 
          ylab = track)
     lines(x, y[[paste("lower", track, sep = ".")]], lty = "dotted")
     lines(x, y[[paste("upper", track, sep = ".")]], lty = "dotted")
+    abline(h = 0, col = "red")
   }
   mtext(title, outer = TRUE, cex = 1.5)
   ## unset penalty for scientific numbers

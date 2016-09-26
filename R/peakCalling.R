@@ -7,8 +7,6 @@
 #' the last one will be taken.
 #' @param range A \code{GRanges} object specifying a range. Bt default the complete fit is taken.
 #' @param peakType The type of the peak (narrow or broad). Default is narrow, see details.
-#' @param border The border type of narrow peaks. Since the fit is a function, those can be defiend by either the minimas
-#' around the peak (broader) or the inflection points (more narrow).
 #' @param threshold The significance threshold. Keep in mind that the treshold depends on the thresholdType.
 #' By default this is 0.05 for 'pvalue' and 0.1 for 'fdr'.
 #' @param thresholdType The threshold type. Either 'fdr'(default) or 'pvalue'. If the threshold is not provided it,
@@ -72,12 +70,19 @@ callPeaks <- function(fit, smooth = NULL, range = NULL, peakType = c("narrow", "
     if(peakType == "narrow") {
         futile.logger::flog.info("Calling narrow peaks")
         npeaks <- getExtremes(x, splines, smooth)
+        if(nrow(npeaks) == 0) {
+          return(data.table())
+        }
         peaks <- computePeakSignificance(fit, npeaks, x)
+        peaks$id <- NULL
     }
     if(peakType == "broad") {
         futile.logger::flog.info("Calling broad peaks")
         zscore <- computeZscore(fit, xid, smooth)
         bpeaks <- callBroadPeaks(zscore, maxgap, cutoff)
+        if(length(bpeaks) == 0) {
+          return(data.table())
+        }
         peaks <- computeBroadPeakSignificance(fit, bpeaks, smooth)
         peaks <- peaks[width >= minregion,]
     }
@@ -182,7 +187,7 @@ getExtremes <- function(x, splines, smooth) {q
     ids <- unique(x$id)
 
   lambdaFun <- function(params, x, smooth) {
-    require(GenoGAM, quietly = TRUE)
+    suppressPackageStartupMessages(require(GenoGAM, quietly = TRUE))
 
     sp <- params[params$smooth == smooth,]
     ii <- attr(params, "id")
@@ -322,17 +327,22 @@ computeZscore <- function(fit, index, smooth) {
 #' @noRd
 callBroadPeaks <- function(zscore, maxgap, cutoff) {
     signifPos <- zscore[pval >= -log(cutoff), pos]
-    diffs <- abs(diff(signifPos))
-    breaks <- which(diffs > maxgap)
+    if(length(signifPos) == 0) {
+      gp <- GenomicRanges::GPos(GRanges())
+    }
+    else {
+      diffs <- abs(diff(signifPos))
+      breaks <- which(diffs > maxgap)
     
-    starts <- c(signifPos[1], signifPos[breaks + 1])
-    ends <- c(signifPos[breaks], signifPos[length(signifPos)])
-    chroms <- c(as.character(zscore[breaks, seqnames]), as.character(zscore[pos == ends[length(ends)], seqnames]))
-    gr <- GenomicRanges::GRanges(chroms, IRanges(starts, ends))
-    gp <- GenomicRanges::GPos(gr)
-    indx <- match(pos(gp), zscore$pos)
-    gp$zscore <- zscore[indx, zscore]
-    gp$pval <- zscore[indx, pval]
+      starts <- c(signifPos[1], signifPos[breaks + 1])
+      ends <- c(signifPos[breaks], signifPos[length(signifPos)])
+      chroms <- c(as.character(zscore[breaks, seqnames]), as.character(zscore[pos == ends[length(ends)], seqnames]))
+      gr <- GenomicRanges::GRanges(chroms, IRanges(starts, ends))
+      gp <- GenomicRanges::GPos(gr)
+      indx <- match(pos(gp), zscore$pos)
+      gp$zscore <- zscore[indx, zscore]
+      gp$pval <- zscore[indx, pval]
+    }
     
     return(gp)
 }
@@ -346,31 +356,34 @@ callBroadPeaks <- function(zscore, maxgap, cutoff) {
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @noRd
 computePeakSignificance <- function(fit, peaks, x) {
-    smooth <- attr(peaks, "smooth")
-
-    gr <- GRanges(peaks$seqnames, IRanges(peaks$position, peaks$position))
-    ov <- findOverlaps(gr, slot(fit, "positions"))
-    xid <- subjectHits(ov)
-    z <- computeZscore(fit, xid, smooth)
-    peaks$zscore <- z$zscore
-    
-    p <- data.table::copy(peaks[type == "max",])
-    v <- data.table::copy(peaks[type == "min",])
-    p <- p[order(zscore, decreasing = TRUE),]
-    v$zscore <- -v$zscore
-    v <- v[order(zscore, decreasing = TRUE),]
-    fdr <- sapply(p$zscore, function(y) {
-        sum(v$zscore >= y)/sum(p$zscore >= y)
-    })
-    fdr[is.nan(fdr)] <- 0
-    if(nrow(v) > 0) fdr <- fdr*(nrow(p)/nrow(v)) ## correct for different size of valleys and peaks to avoid FDR > 1
-    peaks <- p
-    peaks$type <- NULL
-    peaks$score <- -pnorm(-peaks$zscore, log.p = TRUE)
-    peaks$fdr <- fdr
-    attr(peaks, "smooth") <- smooth
-    peaks <- xsd(fit, peaks)
+  if(length(peaks) == 0) {
     return(peaks)
+  }
+  smooth <- attr(peaks, "smooth")
+
+  gr <- GRanges(peaks$seqnames, IRanges(peaks$position, peaks$position))
+  ov <- findOverlaps(gr, slot(fit, "positions"))
+  xid <- subjectHits(ov)
+  z <- computeZscore(fit, xid, smooth)
+  peaks$zscore <- z$zscore
+  
+  p <- data.table::copy(peaks[type == "max",])
+  v <- data.table::copy(peaks[type == "min",])
+  p <- p[order(zscore, decreasing = TRUE),]
+  v$zscore <- -v$zscore
+  v <- v[order(zscore, decreasing = TRUE),]
+  fdr <- sapply(p$zscore, function(y) {
+    sum(v$zscore >= y)/sum(p$zscore >= y)
+  })
+  fdr[is.nan(fdr)] <- 0
+  if(nrow(v) > nrow(p)) fdr <- fdr*(nrow(p)/nrow(v)) ## correct for different size of valleys and peaks to avoid FDR > 1
+  peaks <- p
+  peaks$type <- NULL
+  peaks$score <- -pnorm(-peaks$zscore, log.p = TRUE)
+  peaks$fdr <- fdr
+  attr(peaks, "smooth") <- smooth
+  peaks <- xsd(fit, peaks)
+  return(peaks)
 }
 
 #' Parses data.table of extermums to a data.table of peaks
@@ -425,49 +438,52 @@ parsePeaks <- function(peakDF, x) {
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @noRd
 xsd <- function(fit, peaks) {
-    smooth <- attr(peaks, "smooth")
-    splines <- slot(fit, "smooths")$splines
-    index <- slot(fit, "smooths")$chunkIndex
-    v <- slot(fit, "vcov")
-    gr <- GRanges(peaks$seqnames, IRanges(start = peaks$position, end = peaks$position))
-    id <- subjectHits(findOverlaps(gr, index))
-    peaks$id <- id
-    peaks <- peaks[order(id),]
-    
-    res <- sapply(unique(peaks$id), function(ii) {
-        p <- peaks[id == ii, position]
-        params <- splines[[as.character(ii)]]
-        k <- params[params$smooth == smooth, "knots"]
-        coefs <- na.omit(params[params$smooth == smooth, "coefs"])
-        bsprime <- bspline(p, k, derivative = 1)
-        f2 <- bspline(p, k, derivative = 2) %*% coefs
-        n <- length(v[[as.character(ii)]])
-        
-        ## from vector representing the upper triangular vcov matrix
-        ## to the full symmetric matrix
-        solve_n <- (sqrt(1 + 4*n*2) - 1)/2 ## re-arranged midnight formula to get dimensions of symmetric matrix
-        subv <- diag(solve_n)
-        subv[upper.tri(subv, diag = TRUE)] <- v[[as.character(ii)]]
-        subv <- subv + t(subv) - diag(diag(subv))
-        indx <- which(attr(v[[as.character(ii)]], "smooths") == smooth)
-        
-        betav <- subv[indx, indx]
-        xvar <- diag(bsprime %*% betav %*% t(bsprime))/f2^2
-        return(xvar)
-    })
-    
-    res <- unlist(res)
-    peaks$start <- peaks$position - 1.96 * sqrt(res)
-    peaks$end <- peaks$position + 1.96 * sqrt(res)
-    peaks$start[which(peaks$start < 1)] <- 1
-    for(chrom in seqlevels(index)) {
-        indx <- which(peaks[seqnames == chrom, end] > seqlengths(index)[chrom])
-        if(length(indx) > 0) {
-            pos <- peaks[seqnames == chrom, position][indx]
-            peaks[seqnames == chrom & position == pos]$end <- seqlengths(index)[chrom]
-        }
-    }
+  if(length(peaks) == 0) {
     return(peaks)
+  }
+  smooth <- attr(peaks, "smooth")
+  splines <- slot(fit, "smooths")$splines
+  index <- slot(fit, "smooths")$chunkIndex
+  v <- slot(fit, "vcov")
+  gr <- GRanges(peaks$seqnames, IRanges(start = peaks$position, end = peaks$position))
+  id <- subjectHits(findOverlaps(gr, index))
+  peaks$id <- id
+  peaks <- peaks[order(id),]
+  
+  res <- sapply(unique(peaks$id), function(ii) {
+    p <- peaks[id == ii, position]
+    params <- splines[[as.character(ii)]]
+    k <- params[params$smooth == smooth, "knots"]
+    coefs <- na.omit(params[params$smooth == smooth, "coefs"])
+    bsprime <- bspline(p, k, derivative = 1)
+    f2 <- bspline(p, k, derivative = 2) %*% coefs
+    n <- length(v[[as.character(ii)]])
+    
+    ## from vector representing the upper triangular vcov matrix
+    ## to the full symmetric matrix
+    solve_n <- (sqrt(1 + 4*n*2) - 1)/2 ## re-arranged midnight formula to get dimensions of symmetric matrix
+    subv <- diag(solve_n)
+    subv[upper.tri(subv, diag = TRUE)] <- v[[as.character(ii)]]
+    subv <- subv + t(subv) - diag(diag(subv))
+    indx <- which(attr(v[[as.character(ii)]], "smooths") == smooth)
+    
+    betav <- subv[indx, indx]
+    xvar <- diag(bsprime %*% betav %*% t(bsprime))/f2^2
+    return(xvar)
+  })
+    
+  res <- unlist(res)
+  peaks$start <- peaks$position - 1.96 * sqrt(res)
+  peaks$end <- peaks$position + 1.96 * sqrt(res)
+  peaks$start[which(peaks$start < 1)] <- 1
+  for(chrom in seqlevels(index)) {
+    indx <- which(peaks[seqnames == chrom, end] > seqlengths(index)[chrom])
+    if(length(indx) > 0) {
+      pos <- peaks[seqnames == chrom, position][indx]
+      peaks[seqnames == chrom & position == pos]$end <- seqlengths(index)[chrom]
+    }
+  }
+  return(peaks)
 }
 
 #' Computes the significance of broad peaks
@@ -479,18 +495,21 @@ xsd <- function(fit, peaks) {
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @noRd
 computeBroadPeakSignificance <- function(fit, peakDF, smooth) {
-    bp <- peakDF
-    regions <- peakDF@pos_runs
-    indx <- queryHits(findOverlaps(slot(fit, "positions"), regions))
-    bp$region <- subjectHits(findOverlaps(bp, regions))
-    bp$estimate <- exp(slot(fit, "fits")[indx, smooth])
-    bp <- data.table::data.table(as.data.frame(bp))
-    regions <- data.table::data.table(as.data.frame(regions))
-    pv <- bp[, min(p.adjust(exp(-pval), method="hochberg")), by = region]
-    fpb <- bp[, mean(estimate), by = region]
-    regions$score[pv$region] <- pv$V1
-    regions$meanSignal[fpb$region] <- fpb$V1
-    regions$fdr = p.adjust(regions$score, method="BH")
-    regions$score <- -log(regions$score)
-    return(regions)
+  if(length(peakDF) == 0) {
+    return(data.table())
+  }
+  bp <- peakDF
+  regions <- peakDF@pos_runs
+  indx <- queryHits(findOverlaps(slot(fit, "positions"), regions))
+  bp$region <- subjectHits(findOverlaps(bp, regions))
+  bp$estimate <- exp(slot(fit, "fits")[indx, smooth])
+  bp <- data.table::data.table(as.data.frame(bp))
+  regions <- data.table::data.table(as.data.frame(regions))
+  pv <- bp[, min(p.adjust(exp(-pval), method="hochberg")), by = region]
+  fpb <- bp[, mean(estimate), by = region]
+  regions$score[pv$region] <- pv$V1
+  regions$meanSignal[fpb$region] <- fpb$V1
+  regions$fdr = p.adjust(regions$score, method="BH")
+  regions$score <- -log(regions$score)
+  return(regions)
 }

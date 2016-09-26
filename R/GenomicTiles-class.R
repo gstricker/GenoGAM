@@ -259,46 +259,51 @@ GenomicTiles <- function(assays, chunkSize = 1e4, overhangSize = 0, ...) {
 #' @return A |code{GRanges} object of the tiles.
 .makeTiles <- function(l) {
 
-    if(length(l) == 0) return(GenomicRanges::GRanges())
+  if(length(l) == 0) return(GenomicRanges::GRanges())
 
-    tileList <- BiocParallel::bplapply(l$chromosomes, function(y) {
-        nchunks <- ceiling(width(y)/l$chunkSize)
-        starts <- start(y) + seq(0, nchunks - 1, length.out = nchunks) * l$chunkSize
-        ends <- c(start(y) + seq(1, nchunks - 1, length.out = (nchunks - 1)) * l$chunkSize - 1, end(y))
-        chunks <- GenomicRanges::GRanges(seqnames = seqnames(y), IRanges(starts, ends))
-        if(l$tileSize == l$chunkSize) {
-            tiles <- chunks
-        }
-        else {
-            chunks <- suppressWarnings(IRanges::shift(chunks, round(width(chunks)/2)))
-            tiles <- suppressWarnings(trim(flank(chunks, round(l$tileSize/2),
-                                                 both = TRUE)))
-        }
+  lambdaFun <- function(y, sl) {
 
-        ## adjust first tile
-        startsToResize <- which(start(tiles) < start(y))
-        end(tiles[startsToResize]) <- min(end(tiles[startsToResize]) + start(y) - start(tiles[startsToResize]), end(y))
-        start(tiles[startsToResize]) <- start(y)
+    suppressPackageStartupMessages(require(GenoGAM, quietly = TRUE))
 
-        ## adjust last tile
-        endsToResize <- which(end(tiles) > end(y))
-        start(tiles[endsToResize]) <- max(start(tiles[endsToResize]) - end(tiles[endsToResize]) + end(y), start(y))
-        end(tiles[endsToResize]) <- end(y)
+    nchunks <- ceiling(width(y)/sl$chunkSize)
+    starts <- start(y) + seq(0, nchunks - 1, length.out = nchunks) * sl$chunkSize
+    ends <- c(start(y) + seq(1, nchunks - 1, length.out = (nchunks - 1)) * sl$chunkSize - 1, end(y))
+    chunks <- GenomicRanges::GRanges(seqnames = seqnames(y), IRanges(starts, ends))
+    if(sl$tileSize == sl$chunkSize) {
+      tiles <- chunks
+    }
+    else {
+      chunks <- suppressWarnings(IRanges::shift(chunks, round(width(chunks)/2)))
+      tiles <- suppressWarnings(trim(flank(chunks, round(sl$tileSize/2),
+                                           both = TRUE)))
+    }
 
-        ## remove duplicate tiles if present
-        tiles <- unique(tiles)
-        return(tiles)
-    })
+    ## adjust first tile
+    startsToResize <- which(start(tiles) < start(y))
+    end(tiles[startsToResize]) <- min(end(tiles[startsToResize]) + start(y) - start(tiles[startsToResize]), end(y))
+    start(tiles[startsToResize]) <- start(y)
 
-    tiles <- do.call("c", tileList)
-    seqlengths(tiles) <- seqlengths(l$chromosomes)
-    seqlevels(tiles, force = TRUE) <- seqlevelsInUse(tiles)
+    ## adjust last tile
+    endsToResize <- which(end(tiles) > end(y))
+    start(tiles[endsToResize]) <- max(start(tiles[endsToResize]) - end(tiles[endsToResize]) + end(y), start(y))
+    end(tiles[endsToResize]) <- end(y)
 
-    ## add 'id' and 'dist' column and put settings in metadata
-    mcols(tiles)$id <- 1:length(tiles)
-    l$numTiles <- length(tiles)
-    metadata(tiles) <- l
+    ## remove duplicate tiles if present
+    tiles <- unique(tiles)
     return(tiles)
+  }
+
+  tileList <- BiocParallel::bplapply(l$chromosomes, lambdaFun, sl = l)
+
+  tiles <- do.call("c", tileList)
+  seqlengths(tiles) <- seqlengths(l$chromosomes)
+  seqlevels(tiles, force = TRUE) <- seqlevelsInUse(tiles)
+  
+  ## add 'id' and 'dist' column and put settings in metadata
+  mcols(tiles)$id <- 1:length(tiles)
+  l$numTiles <- length(tiles)
+  metadata(tiles) <- l
+  return(tiles)
 }
 
 ## #' A function to produce the row coordinates from GPos object.
@@ -1157,7 +1162,7 @@ setMethod("subsetByOverlaps", c("GenomicTiles", "GRanges"),
                       ceiling(seq_along(mcols(index)$id)/blockSize)))
     
     dfList <- do.call(c, bplapply(blockList, function(y) {
-        require(GenoGAM, quietly = TRUE)
+        suppressPackageStartupMessages(require(GenoGAM, quietly = TRUE))
         blockindx <- index[match(y, index$id),]
         subgt <- .subsetByOverlaps(gt, blockindx)
         df <- DataFrame(subgt)
