@@ -4,12 +4,15 @@
 \alias{computeRegionSignificance}
 \title{Compute significance for given regions}
 \usage{
-computeRegionSignificance(fit, regions)
+computeRegionSignificance(fit, regions, what = NULL)
 }
 \arguments{
 \item{fit}{A GenoGAM object containing the fit}
 
 \item{regions}{A GRanges object of regions of interest}
+
+\item{what}{Which fit should be used. The names should be equivalent to the column names used in the config file.
+Lookup with \code{names(colData(my_GenoGAMDataSet_object))}}
 }
 \value{
 The GRanges object from the 'region' parameter extended by two columns: pvalue and FDR
@@ -21,6 +24,11 @@ For a given set of regions, region-wise pvalues and FDR is computed
 For a given set of regions, region-wise pvalues are computed by applying
 familywise hochberg correction and taking the minimal p-value. FDR is computed by further
 applying Benjamini-Hochberg correction.
+}
+\examples{
+gg <- makeTestGenoGAM()
+gr <- GRanges("chrI", IRanges(1,100))
+computeRegionSignificance(gg, gr)
 }
 \author{
 Georg Stricker \email{georg.stricker@in.tum.de}

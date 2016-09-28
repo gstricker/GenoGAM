@@ -4,6 +4,7 @@
 #' @import S4Vectors
 #' @import BiocParallel
 #' @import Rsamtools
+#' @import Biostrings
 #' @importFrom data.table data.table
 #' @importFrom data.table fread
 #' @importFrom data.table rbindlist

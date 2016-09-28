@@ -18,6 +18,7 @@ NULL
 #' to the rows in the 'fits' slot.
 #' @slot smooths A data.frame of knot positions and base function coefficients,
 #' in order to reproduce the splines and compute derivatives. 
+#' @slot vcov A list of covariance matrices for each tile fit.
 #' @slot experimentDesign The design matrix according to which the fitting
 #' was performed.
 #' @slot fitparams Global parameters 'lambda', 'theta', 'Coefficient of Variation' and
@@ -142,14 +143,25 @@ setValidity2("GenoGAM", .validateGenoGAM)
 ## Accessors
 ## =========
 
+#' GenoGAM-methods
+#'
+#' The different accessor functions for the GenoGAM object
+#'
+#' @name GenoGAM-methods
+#' @rdname GenoGAM-methods
+#' @param x,object A GenoGAM object.
+#' @return The respective slot
+#' @author Georg Stricker \email{georg.stricker@@in.tum.de}
+NULL
+
 #' Accessor to the 'positions' slot
 #'
-#' The positions slot holds the positions of the fits as a |code{GPos} object
+#' The 'positions' slot holds the positions of the fit in GPos format
 #'
+#' @examples
+#' gg <- makeTestGenoGAM()
+#' ranges <- rowRanges(gg)
 #' @rdname GenoGAM-methods
-#' @param object A GenoGAM object.
-#' @return A GPos object representing the positions
-#' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @export
 setMethod("rowRanges", "GenoGAM", function(x) {
     x@positions
@@ -159,10 +171,10 @@ setMethod("rowRanges", "GenoGAM", function(x) {
 #'
 #' The 'design' slot holds the formula of the fit
 #'
+#' @examples
+#' gg <- makeTestGenoGAM()
+#' des <- design(gg)
 #' @rdname GenoGAM-methods
-#' @param object A formula object.
-#' @return The formula of the fit
-#' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @export
 setMethod("design", "GenoGAM", function(object) {
     object@design
@@ -170,31 +182,27 @@ setMethod("design", "GenoGAM", function(object) {
 
 #' @rdname GenoGAM-methods
 #' @export
-setGeneric("getFits", function(object) standardGeneric("getFits"))
+setGeneric("getFits", function(x) standardGeneric("getFits"))
 
 #' Accessor to 'fits' slot
 #'
 #' The 'fits' slot contains the fitted values of the model
 #'
-#' @param object A GenoGAM object
-#' @return A data.frame of the fits
 #' @examples
 #' gg <- makeTestGenoGAM()
 #' fits <- getFits(gg)
 #' @rdname GenoGAM-methods
 #' @export
-setMethod("getFits", "GenoGAM", function(object) object@fits)
+setMethod("getFits", "GenoGAM", function(x) x@fits)
 
 #' Accessor to the 'experimentDesign' slot
 #'
 #' The 'experimentDesign' slot contains the experimental design of the model as
 #' specified in the config file
 #'
-#' @param object A GenoGAM object
-#' @return A named matrix
 #' @examples
 #' gg <- makeTestGenoGAM()
-#' fits <- colData(gg)
+#' exdesign <- colData(gg)
 #' @rdname GenoGAM-methods
 #' @export
 setMethod("colData", "GenoGAM", function(x) x@experimentDesign)
@@ -264,7 +272,7 @@ makeTestGenoGAM <- function() {
     gg <- .GenoGAM()
     gp <- GenomicRanges::GPos(GenomicRanges::GRanges("chrI", IRanges::IRanges(1, 100)))
     fits <- data.frame(runif(100), runif(100), runif(100), runif(100))
-    names(fits) <- c("s(x)", "s(x)::type", "se.s(x)", "se.s(x)::type")
+    names(fits) <- c("s(x)", "s(x):type", "se.s(x)", "se.s(x):type")
     slot(gg, "positions") <- gp
     slot(gg, "fits") <- fits
     return(gg)
@@ -409,6 +417,10 @@ setMethod("view", "GenoGAM", function(object, ranges = NULL, seqnames = NULL,
 #' @param gg A fitted GenoGAM object.
 #' @param log.p Should pvalues be returned in log scale?
 #' @return A GenoGAM object which fits has been updated by the pvalue columns.
+#' @examples
+#' ggd <- makeTestGenoGAM()
+#' ggd <- computeSignificance(ggd)
+#' head(getFits(ggd))
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @export
 computeSignificance <- function(gg, log.p = FALSE) {

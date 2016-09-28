@@ -179,6 +179,20 @@ The \Robject{design} parameter is explained in the next section.
 
 Finally, the last line of code calls the function \Rfunction{subset()} to restrict the \Rclass{GenoGAMDataset} to the positions of interest. This line is necessary for running this small example but would not be present in a standard genome-wide run of \genogam{}.
 
+\textbf{Note:} genogam{} have a settings-class available but not open to the user, as it is not yet fully developed. The \Rfunction{GenoGAMDataSet} function however can take an argument \emph{settings} that would take such an object as input. The argument is there to allow for some specific workarounds
+if necessary. The most common one would be to load only a subset of the data from a BAM file for example defined by \emph{chromosome} names or supplying
+a \Robject{ScanBamParam} object from the \Rpackage{GenomicAlignments} package. The examples are not run.
+
+<<settings, eval=FALSE>>=
+## specify specific chromosomes
+settings <- GenoGAM:::GenoGAMSettings(chromosomeList = c('chrI', 'chrII'))
+
+## specify parameters through ScanBamParam
+gr <- GRanges("chrI", IRanges(1,100000))
+params <- ScanBamParam(which = gr)
+settings <- GenoGAM:::GenoGAMSettings(bamParams = params)
+@ 
+
 \subsection{Modeling with smooth functions: the \Robject{design} parameters}
 \genogam{} models the logarithm of the rate of the count data as sums of smooth functions of the genomic position, denoted \Robject{x}. The \Robject{design} parameter is an R formula which allows encoding how the smooth functions depend on the experimental design. \genogam follows formula convention of the R package \Rpackage{mgcv}. A smooth function is denoted \Robject{s()}. For now, \genogam{} only supports smooth function that are cubic splines of the genomic position \Robject{x}. The \Robject{by} variable allows selecting to which samples the smooth contributes to (see also the 
 documentation of \Robject{gam.models} in the \Rpackage{mgcv}). For now, \genogam{} only allows \Robject{by} variables to be of value 0 or 1 (hence binary dummy encoding). Here by setting \Robject{'s(x, by=genotype)'} we encode the term "$ \text{genotype} \times f_\text{mutant/wt}(x)$" in Equation ~\ref{eq:mutantmodel}. 

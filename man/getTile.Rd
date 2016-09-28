@@ -8,7 +8,7 @@
 \usage{
 getTile(object, id, ...)
 
-\S4method{getTile}{GenomicTiles}(object, id, size = 3e+07)
+\S4method{getTile}{GenomicTiles}(object, id, size = 3e+09)
 }
 \arguments{
 \item{object}{A \code{GenomicTiles} object}

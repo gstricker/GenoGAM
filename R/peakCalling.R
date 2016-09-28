@@ -30,72 +30,78 @@
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @export
 callPeaks <- function(fit, smooth = NULL, range = NULL, peakType = c("narrow", "broad"), threshold = NULL, thresholdType = c("fdr","pvalue"), maxgap = 500, cutoff = 0.05, minregion = 1) {
-    ## set parameters
-    thresholdType <- match.arg(thresholdType)
-    peakType <- match.arg(peakType)
-    if(is.null(threshold)) {
-        threshold <- switch(thresholdType,
-                            fdr = 0.1,
-                            pvalue = 0.05)
-    }
-    
-    splines <- fit@smooths$splines
-    index <- fit@smooths$chunkIndex
-    if(is.null(smooth)) {
-        lables <- colnames(fit@experimentDesign)
-        smooth <- paste("s(x)", lables[length(lables)], sep = ":")
+  ## set parameters
+  thresholdType <- match.arg(thresholdType)
+  peakType <- match.arg(peakType)
+  if(is.null(threshold)) {
+    threshold <- switch(thresholdType,
+                        fdr = 0.1,
+                        pvalue = 0.05)
+  }
+  
+  splines <- fit@smooths$splines
+  index <- fit@smooths$chunkIndex
+  if(is.null(smooth)) {
+    lables <- colnames(fit@experimentDesign)
+    if(is.null(lables)) {
+        smooth <- paste("s(x)")
     }
     else {
-        if(smooth == "") {
-            smooth <- "s(x)"
-        }
-        else {
-            smooth <- paste("s(x)", smooth, sep = ":")
-        }
+      smooth <- paste("s(x)", lables[length(lables)], sep = ":")
     }
+  }
+  else {
+    if(smooth == "") {
+      smooth <- "s(x)"
+    }
+    else {
+      smooth <- paste("s(x)", smooth, sep = ":")
+    }
+  }
 
-    if(is.null(range)) {
-        xid <- 1:length(fit@positions)
-    }
-    else {
-        xid <- queryHits(findOverlaps(fit@positions, range))
-    }
-    
-    ## find row index by overlaps and subset position vector
-    iid <- queryHits(findOverlaps(index, fit@positions[xid]))
+  if(is.null(range)) {
+    xid <- 1:length(fit@positions)
+  }
+  else {
+    xid <- queryHits(findOverlaps(fit@positions, range))
+  }
+  
+  ## find row index by overlaps and subset position vector
+  iid <- queryHits(findOverlaps(index, fit@positions[xid]))
 
   x <- DataFrame(seqnames = Rle(as.factor(seqnames(fit@positions)[xid])),
-                              pos = pos(fit@positions)[xid], id = Rle(iid))
-    
-    if(peakType == "narrow") {
-        futile.logger::flog.info("Calling narrow peaks")
-        npeaks <- getExtremes(x, splines, smooth)
-        if(nrow(npeaks) == 0) {
-          return(data.table())
-        }
-        peaks <- computePeakSignificance(fit, npeaks, x)
-        peaks$id <- NULL
+                 pos = pos(fit@positions)[xid], id = Rle(iid))
+  
+  if(peakType == "narrow") {
+    futile.logger::flog.info("Calling narrow peaks")
+    npeaks <- getExtremes(x, splines, smooth)
+    if(nrow(npeaks) == 0) {
+      return(data.table())
     }
-    if(peakType == "broad") {
-        futile.logger::flog.info("Calling broad peaks")
-        zscore <- computeZscore(fit, xid, smooth)
-        bpeaks <- callBroadPeaks(zscore, maxgap, cutoff)
-        if(length(bpeaks) == 0) {
-          return(data.table())
-        }
-        peaks <- computeBroadPeakSignificance(fit, bpeaks, smooth)
-        peaks <- peaks[width >= minregion,]
+    peaks <- computePeakSignificance(fit, npeaks, x)
+    peaks$id <- NULL
+  }
+  if(peakType == "broad") {
+    futile.logger::flog.info("Calling broad peaks")
+    zscore <- computeZscore(fit, xid, smooth)
+    bpeaks <- callBroadPeaks(zscore, maxgap, cutoff)
+    if(length(bpeaks) == 0) {
+      return(data.table())
     }
-    
-    if(thresholdType == "pvalue") {        
-        signif <- peaks[score >= -log(threshold),]
-        signif <- signif[order(score, decreasing = TRUE),]
-    }
-    if(thresholdType == "fdr") {
-        signif <- peaks[fdr <= threshold,]
-        signif <- signif[order(fdr),]
-    }
-    return(signif)
+    peaks <- computeBroadPeakSignificance(fit, bpeaks, smooth)
+    peaks <- peaks[width >= minregion,]
+  }
+  
+  if(thresholdType == "pvalue") {        
+    signif <- peaks[score >= -log(threshold),]
+    signif <- signif[order(score, decreasing = TRUE),]
+  }
+  if(thresholdType == "fdr") {
+    signif <- peaks[fdr <= threshold,]
+    signif <- signif[order(fdr),]
+  }
+  futile.logger::flog.info("DONE")
+  return(signif)
 }
 
 #' Get extreme points on a piecewise polynomial function for a single tile
@@ -291,7 +297,7 @@ computeZscore <- function(fit, index, smooth) {
     all <- slot(fit, "fits")[,smooth]
     se_all <- slot(fit, "fits")[,se_smooth]
     
-    isInstalled <- require(genefilter, quietly = TRUE)
+    isInstalled <- requireNamespace("genefilter", quietly = TRUE)
     if(isInstalled) {
         mu0 <- genefilter::shorth(all, na.rm=TRUE)
     }

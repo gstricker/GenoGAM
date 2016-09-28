@@ -78,6 +78,10 @@ setValidity2("GenoGAMDataSet", .validateGenoGAMDataSet)
 #' @param design A mgcv-like formula object. See details for its structure.
 #' @param directory The directory from which to read the data. By default
 #' the current working directory is taken.
+#' @param settings A GenoGAMSettings object. This class is already present but 
+#' not yet fully tested and therefore not accessible to the user. This
+#' argument exists however in order to allow some workarounds if necessary.
+#' See the vignette for a possible use.
 #' @param ... Further parameters, mostly for arguments of custom processing
 #' functions or to specify a different method for fragment size estimation.
 #' See details for further information.
@@ -299,7 +303,7 @@ GenoGAMDataSet <- function(experimentDesign, chunkSize, overhangSize, design,
 #' @export
 makeTestGenoGAMDataSet <- function() {
     gp <- GenomicRanges::GPos(GenomicRanges::GRanges(c("chrI", "chrII"), IRanges(c(1,1), c(50,50))))
-    df <- DataFrame(a = 1:100, b = 101:200)
+    df <- DataFrame(a = Rle(1:100), b = Rle(101:200))
     se <- SummarizedExperiment::SummarizedExperiment(list(df), rowRanges = gp)
     ggd <- GenoGAMDataSet(se, chunkSize = 15, overhangSize = 3,
                           design = ~s(x))

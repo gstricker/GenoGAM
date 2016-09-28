@@ -10,16 +10,43 @@
 #' @details For a given set of regions, region-wise pvalues are computed by applying
 #' familywise hochberg correction and taking the minimal p-value. FDR is computed by further
 #' applying Benjamini-Hochberg correction.
+#' @examples
+#' gg <- makeTestGenoGAM()
+#' gr <- GRanges("chrI", IRanges(1,100))
+#' computeRegionSignificance(gg, gr)
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @export
-computeRegionSignificance <- function(fit, regions, what) { ##### <- TODO
+computeRegionSignificance <- function(fit, regions, what = NULL) { 
     futile.logger::flog.info("Estimating region p-values and FDR")
+
+    pCols <- grep("pvalue", names(fit@fits))
+    if(length(pCols) == 0) {
+      fit <- computeSignificance(fit)
+    }
+    
+    if(is.null(what)) {
+      lables <- colnames(fit@experimentDesign)
+      if(is.null(lables)) {
+        what <- paste("pvalue.s(x)")
+      }
+      else {
+        what <- paste("pvalue.s(x)", lables[length(lables)], sep = ":")
+      }
+    }
+  else {
+      if(what == "") {
+        what <- paste("pvalue.s(x)")
+      }
+      else {
+        what <- paste("pvalue.s(x)", what, sep = ":")
+      }
+    }
     
     ov <- data.table::data.table(view(fit, ranges = regions))
     regions_group <- IRanges::findOverlaps(rowRanges(fit), regions)
     ov$gene <- as.factor(subjectHits(regions_group))
     
-    data.table::setnames(ov, paste("pvalue.s(x)", what, sep = ":"), "pvalue")
+    data.table::setnames(ov, what, "pvalue")
     pv = ov[, min(p.adjust(pvalue, method="hochberg")), by = gene]
     
     regions$pvalue = NA

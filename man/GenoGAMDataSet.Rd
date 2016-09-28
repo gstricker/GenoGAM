@@ -5,7 +5,7 @@
 \title{GenoGAMDataSet constructor.}
 \usage{
 GenoGAMDataSet(experimentDesign, chunkSize, overhangSize, design,
-  directory = ".", ...)
+  directory = ".", settings = NULL, ...)
 }
 \arguments{
 \item{experimentDesign}{Either a character object specifying the path to a
@@ -23,6 +23,11 @@ should be provided.}
 
 \item{directory}{The directory from which to read the data. By default
 the current working directory is taken.}
+
+\item{settings}{A GenoGAMSettings object. This class is already present but 
+not yet fully tested and therefore not accessible to the user. This
+argument exists however in order to allow some workarounds if necessary.
+See the vignette for a possible use.}
 
 \item{...}{Further parameters, mostly for arguments of custom processing
 functions or to specify a different method for fragment size estimation.
