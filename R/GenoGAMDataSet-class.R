@@ -135,6 +135,9 @@ setValidity2("GenoGAMDataSet", .validateGenoGAMDataSet)
 #' gtiles <- GenoGAMDataSet(myConfig2, chunkSize = 2000,
 #' overhang = 250, design = ~ s(x) + s(x, by = "experiment"))
 #' }
+#' ## make a test dataset
+#' ggd <- makeTestGenoGAMDataSet()
+#' ggd
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @export
 GenoGAMDataSet <- function(experimentDesign, chunkSize, overhangSize, design,

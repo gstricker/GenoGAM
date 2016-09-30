@@ -299,6 +299,11 @@ peaks <- callPeaks(fit, smooth = "genotype", threshold = 1,
 peaks
 @ 
 
+The function \Rfunction{writeToBEDFile} provides an easy way to write the peaks data.table to a \emph{narrowPeaks} or \emph{broadPeaks} file. The suffix will be determined automatically
+<<bed, eval=FALSE>>=
+writeToBEDFile(peaks, file = 'myPeaks')
+@ 
+
 \section{Computation statistics}
 At the moment the computation time for genome-wide analysis ranges from a couple of hours on yeast to a 2-3 days on human. The memory usage never exceeded
 4GByte per core. Usually it was around 2-3 GByte per core. We are also currently implementing an optimized model fitting procedure, that reduces computation time significantly. Unfortunately we were not able to include it into the package for this Bioconductor release, but are confident to be able to do it into the next release. Interested users should therefore check the developer version of \Biocpkg{GenoGAM} for updates.

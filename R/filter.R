@@ -69,7 +69,7 @@ compute_filter <- function(ggd, threshold = NULL, windowsize = 201, mode = c("su
       sumsMedian <- mean(sums, na.rm = TRUE)
     }
     sumsMAD <- mad(sums)
-    threshold <- sumsMedian + 3*sumsMAD
+    threshold <- sumsMedian + 6*sumsMAD
     futile.logger::flog.info(paste("Threshold estimated at", threshold))
   }
 

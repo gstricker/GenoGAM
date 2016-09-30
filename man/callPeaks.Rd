@@ -49,6 +49,17 @@ measure to the peak position. Also narrow peaks provide an occupancy estimate at
 give the average occupancy accross the region.
 The columns returned are:
 }
+\examples{
+load(system.file("extdata/Set1/fit.rda", package='GenoGAM'))
+## calling narrow peaks
+peaks <- callPeaks(fit, smooth = "genotype", threshold = 1)
+peaks
+
+## calling broad peaks
+peaks <- callPeaks(fit, smooth = "genotype", threshold = 1, 
+                  peakType = "broad", cutoff = 0.75)
+peaks
+}
 \author{
 Georg Stricker \email{georg.stricker@in.tum.de}
 }

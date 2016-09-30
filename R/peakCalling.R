@@ -26,7 +26,16 @@
 #' measure to the peak position. Also narrow peaks provide an occupancy estimate at the peak position, while broad peaks
 #' give the average occupancy accross the region.
 #' The columns returned are:
-#' 
+#' @examples
+#' load(system.file("extdata/Set1/fit.rda", package='GenoGAM'))
+#' ## calling narrow peaks
+#' peaks <- callPeaks(fit, smooth = "genotype", threshold = 1)
+#' peaks
+#'
+#' ## calling broad peaks
+#' peaks <- callPeaks(fit, smooth = "genotype", threshold = 1, 
+#'                   peakType = "broad", cutoff = 0.75)
+#' peaks
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @export
 callPeaks <- function(fit, smooth = NULL, range = NULL, peakType = c("narrow", "broad"), threshold = NULL, thresholdType = c("fdr","pvalue"), maxgap = 500, cutoff = 0.05, minregion = 1) {
@@ -518,4 +527,62 @@ computeBroadPeakSignificance <- function(fit, peakDF, smooth) {
   regions$fdr = p.adjust(regions$score, method="BH")
   regions$score <- -log(regions$score)
   return(regions)
+}
+
+#' Write peaks to BED6+3/4 format
+#'
+#' A function to write the data.table of peaks into a narrowPeaks or broadPeaks file
+#'
+#' @param peaks A data.table or data.frame of peaks as produced by callPeaks()
+#' @param file A file name without suffix. It will be determined automatically. If no
+#' file is given, it will be written to a generic 'peaks_[timestamp]' file in the
+#' current working directory
+#' @return Nothing. A narrowPeaks or broadPeaks file written to 'file'
+#' @author Georg Stricker \email{georg.stricker@@in.tum.de}
+#' @export
+writeToBEDFile <- function(peaks, file = NULL){
+  writeBroadPeaks <- FALSE
+  if("width" %in% names(peaks)) {
+    writeBroadPeaks <- TRUE
+  }
+  if(is.null(file)) {
+    timestamp <- gsub("-", "",strsplit(as.character(Sys.time()), split=" ")[[1]][1])
+    file <- paste0("peaks_", timestamp)
+  }
+  if(writeBroadPeaks) {
+    file <- paste0(file, ".broadPeak")
+    writeToBroadPeaks(peaks, file)
+  }
+  else {
+    file <- paste0(file, ".narrowPeak")
+    writeToNarrowPeaks(peaks, file)
+  }
+  futile.logger::flog.info(paste0("File written to ", file))
+}
+
+#' @author Georg Stricker \email{georg.stricker@@in.tum.de}
+#' @noRd
+writeToBroadPeaks <- function(peaks, file){
+  res <- peaks[,list(seqnames, start, end)]
+  res$name <- factor(".")
+  res$score <- 0
+  res$strand <- factor(".")
+  res$siganl <- peaks$meanSignal
+  res$pvalue <- peaks$score
+  res$qvalue <- peaks$fdr
+  write.table(peaks, file = file, row.names = FALSE, col.names = FALSE, sep = "/t")
+}
+
+#' @author Georg Stricker \email{georg.stricker@@in.tum.de}
+#' @noRd
+writeToNarrowPeaks <- function(peaks, file){
+  res <- peaks[,list(seqnames, start, end)]
+  res$name <- factor(".")
+  res$score <- 0
+  res$strand <- factor(".")
+  res$summit <- peaks$summit
+  res$pvalue <- peaks$score
+  res$qvalue <- peaks$fdr
+  res$peak <- peaks$position - peaks$start
+  write.table(peaks, file = file, row.names = FALSE, col.names = FALSE, sep = "/t")
 }

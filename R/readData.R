@@ -254,7 +254,7 @@
 #' @param ... Further parameters that can be passed on to.
 #' chipseq::estimate.mean.fraglen.
 #' @return An Rle coverage object.
-#' @author Georg Stricker \email{stricker@@genzentrum.lmu.de}
+#' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 .countFragments <- function(reads, asMates, shiftMethod =
                             c("coverage", "correlation", "SISSR"), ...) {
     if(is.null(reads)) return(NULL)
@@ -262,11 +262,11 @@
     plusStrand <- reads[strand(reads) == "+",]
     negStrand <- reads[strand(reads) == "-",]
     if (asMates) {
-        plusFragments <- unlist(sapply(1:length(plusStrand), function(y) {
+        plusFragments <- unlist(sapply(1:nrow(plusStrand), function(y) {
             start(plusStrand[y,]):end(plusStrand[y,])
         }))
     
-        negFragments <- unlist(sapply(1:length(negStrand), function(y) {
+        negFragments <- unlist(sapply(1:nrow(negStrand), function(y) {
             start(negStrand[y,]):end(negStrand[y,])
         }))
     }
@@ -324,9 +324,9 @@
 #'
 #' @param chunk A GAligmnents object.
 #' @return A vector of midpoints.
-#' @author Georg Stricker \email{stricker@@genzentrum.lmu.de}
+#' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 .getPairedCenters <- function(chunk) {
-    if(length(chunk) == 0) return(integer())
+    if(nrow(chunk) == 0) return(integer())
     strand <- runValue(strand(chunk))
     if(strand == "+") {
         fragmentSize <-  end(last(chunk)) - start(first(chunk))
