@@ -2,7 +2,7 @@
 #'
 #' This functions plots the fit of a given region and optionally the read counts from the GenoGAMDataSet object
 #'
-#' @param fit A \code{GenoGAM} object
+#' @param x A \code{GenoGAM} object
 #' @param ggd A \code{GenoGAMDataSet} object to plot raw counts
 #' @param ranges A \code{GRanges} object specifying a particular region
 #' @param seqnames A chromosome name. Together with start and end it is an
@@ -10,19 +10,20 @@
 #' @param start The start of a region
 #' @param end The end of a region
 #' @param scale Logical, should all tracks be scaled to the same y-axis?
+#' @param ... Additional parameters that will be passed to the basic plot routine
 #' @return A plot of all tracks either using the ggplot2 or the base R framework
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @export
 
-plot.GenoGAM <- function(fit, ggd = NULL, ranges = NULL, seqnames = NULL,
-                      start = NULL, end = NULL, scale = TRUE) {
+plot.GenoGAM <- function(x, ggd = NULL, ranges = NULL, seqnames = NULL,
+                      start = NULL, end = NULL, scale = TRUE, ...) {
   ## Cap for too long regions
   cap <- 1e5
-  loc <- rowRanges(fit)
+  loc <- rowRanges(x)
   indx <- 1:length(loc)
 
   if(is.null(seqnames) & is.null(start) & is.null(end) & is.null(ranges)) {
-    sub <- fit
+    sub <- x
     if(length(rowRanges(fit)) > cap) {
       stop("The entire fit is too big. Plotting is not advised, please provide a smaller region.")
     }
@@ -53,8 +54,8 @@ plot.GenoGAM <- function(fit, ggd = NULL, ranges = NULL, seqnames = NULL,
   }
   
   ## assemble
-  x <- pos(loc)[indx]
-  y <- getFits(fit)[indx,]
+  pos <- pos(loc)[indx]
+  y <- getFits(x)[indx,]
   inputData <- NULL ## the raw data, not present by default
   if(!is.null(ggd)) {
     inputData <- assay(ggd)[indx,]
@@ -65,11 +66,11 @@ plot.GenoGAM <- function(fit, ggd = NULL, ranges = NULL, seqnames = NULL,
   ## if(require(Gviz)) {
   ##   plot_gviz()
   ## }
-  if(require(ggplot2) & require(grid)) {
-    plot_ggplot2(x = x, y = y, inputData = inputData, scale = scale, title = title)
+  if(requireNamespace("ggplot2", quietly = TRUE) & requireNamespace("grid", quietly = TRUE)) {
+    plot_ggplot2(x = pos, y = y, inputData = inputData, scale = scale, title = title)
   }
   else {
-    plot_base(x = x, y = y, inputData = inputData, scale = scale, title = title)
+    plot_base(x = pos, y = y, inputData = inputData, scale = scale, title = title, ...)
   }
 }
 
@@ -126,8 +127,9 @@ plot_ggplot2 <- function(x, y, inputData = NULL, scale = TRUE, title = "") {
         input_ylim <- range(y[[inputName]])
       }
       assign(paste0("yinput", idx), y[[inputName]])
-      plotList[[idx]] <- ggplot(y, aes(x = x, y = get(paste0("yinput", idx)))) + 
-        geom_point(color = "#73737330") + ylim(input_ylim) + ylab(inputName) + xlab("")
+      plotList[[idx]] <- ggplot2::ggplot(y, ggplot2::aes(x = x, y = get(paste0("yinput", idx)))) + 
+        ggplot2::geom_point(color = "#73737330") + ggplot2::ylim(input_ylim) + 
+      ggplot2::ylab(inputName) + ggplot2::xlab("")
       idx <- idx + 1
     }
   }
@@ -152,25 +154,25 @@ plot_ggplot2 <- function(x, y, inputData = NULL, scale = TRUE, title = "") {
     assign(paste0("yinput", idx), y[[track]])
     assign(paste0("lower", idx), y[[paste("lower", track, sep = ".")]]) 
     assign(paste0("upper", idx), y[[paste("upper", track, sep = ".")]]) 
-    plotList[[idx]] <- ggplot(y, aes(x, get(paste0("yinput", idx)))) + 
-      geom_ribbon(aes(ymin = get(paste0("lower", idx)),
-                      ymax = get(paste0("upper", idx))), fill = "grey70") + 
-      geom_line() + ylim(fit_ylim) + ylab(track) + xlab(xlab) +
-      geom_hline(yintercept = 0, colour = "red")
+    plotList[[idx]] <- ggplot2::ggplot(y, ggplot2::aes(x, get(paste0("yinput", idx)))) + 
+      ggplot2::geom_ribbon(ggplot2::aes(ymin = get(paste0("lower", idx)),
+                                        ymax = get(paste0("upper", idx))), fill = "grey70") + 
+      ggplot2::geom_line() + ggplot2::ylim(fit_ylim) + ggplot2::ylab(track) + 
+      ggplot2::xlab(xlab) + ggplot2::geom_hline(yintercept = 0, colour = "red")
     idx <- idx + 1
   }
 
   ## arrange plots in grid
-  grid.newpage()
-  pushViewport(viewport(layout = grid.layout(numTracks + 1, 1, heights = unit(c(0.5, rep(10/numTracks, numTracks)), "null"))))
-  grid.text(title, vp = viewport(layout.pos.row = 1, layout.pos.col = 1))
+  grid::grid.newpage()
+  grid::pushViewport(grid::viewport(layout = grid::grid.layout(numTracks + 1, 1, heights = grid::unit(c(0.5, rep(10/numTracks, numTracks)), "null"))))
+  grid::grid.text(title, vp = grid::viewport(layout.pos.row = 1, layout.pos.col = 1))
   for(idx in 1:length(plotList)) {
-    print(plotList[[idx]], vp = viewport(layout.pos.row = idx + 1, layout.pos.col = 1))         
+    print(plotList[[idx]], vp = grid::viewport(layout.pos.row = idx + 1, layout.pos.col = 1))         
   }
 }
 
 #' @noRd
-plot_base <- function(x, y, inputData = NULL, scale = TRUE, title = "") {
+plot_base <- function(x, y, inputData = NULL, scale = TRUE, title = "", ...) {
 
   numTracks <- ncol(y)/2
 
@@ -239,7 +241,7 @@ plot_base <- function(x, y, inputData = NULL, scale = TRUE, title = "") {
     }
 
     plot(x, y[,ii], type = "l", col = 'black', ylim = fit_ylim, xlab = xlab, 
-         ylab = track)
+         ylab = track, ...)
     lines(x, y[[paste("lower", track, sep = ".")]], lty = "dotted")
     lines(x, y[[paste("upper", track, sep = ".")]], lty = "dotted")
     abline(h = 0, col = "red")

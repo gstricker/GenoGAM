@@ -43,62 +43,65 @@ mergeRanges <- function(ranges, overlap = 0) {
 #' @noRd
 compute_filter <- function(ggd, threshold = NULL, windowsize = 201, mode = c("sum", "mean")) {
 
-    mode <- match.arg(mode)
-    
-    if(windowsize%%2 == 0) {
-        windowsize <- windowsize + 1
+  mode <- match.arg(mode)
+  
+  if(windowsize%%2 == 0) {
+    windowsize <- windowsize + 1
+  }
+  tileSize <- tileSettings(ggd)$tileSize
+
+  ## sliding window of sums
+  sumsList <- lapply(colnames(ggd), function(y) {
+    if(mode == "sum") {
+      ans <- runsum(assay(ggd)[,y], windowsize, endrule = "constant")
     }
-    tileSize <- tileSettings(ggd)$tileSize
-
-    ## sliding window of sums
-    sumsList <- lapply(colnames(ggd), function(y) {
-        if(mode == "sum") {
-            ans <- runsum(assay(ggd)[,y], windowsize, endrule = "constant")
-        }
-        if(mode == "mean") {
-            ans <- runmean(assay(ggd)[,y], windowsize, endrule = "constant")
-        }
-        return(ans)
-    })
-    sums <- rowSums(data.frame(sumsList))
-
-    ## compute threshold as 3 times the MAD from median when not provided
-    if(is.null(threshold)) {
-        sumsMedian <- median(sums)
-        if(sumsMedian <= 0) {
-          sumsMedian <- mean(sums, na.rm = TRUE)
-        }
-        sumsMAD <- mad(sums)
-        threshold <- sumsMedian + 3*sumsMAD
-        futile.logger::flog.info(paste("Threshold estimated at", threshold))
+    if(mode == "mean") {
+      ans <- runmean(assay(ggd)[,y], windowsize, endrule = "constant")
     }
+    return(ans)
+  })
+  sums <- rowSums(data.frame(sumsList))
 
-    ## find ranges complying with the threshold
-    indx <- which(sums >= threshold)
-    poi <- rowRanges(ggd)[indx,]
-    diffs <- abs(diff(pos(poi)))
-    breaks <- which(diffs > tileSize)
+  ## compute threshold as 3 times the MAD from median when not provided
+  if(is.null(threshold)) {
+    sumsMedian <- median(sums)
+    if(sumsMedian <= 0) {
+      sumsMedian <- mean(sums, na.rm = TRUE)
+    }
+    sumsMAD <- mad(sums)
+    threshold <- sumsMedian + 6*sumsMAD
+    futile.logger::flog.info(paste("Threshold estimated at", threshold))
+  }
 
-    starts <- c(start(poi[1,]), start(poi[breaks + 1,]))
-    ends <- c(start(poi[breaks,]), start(poi[length(poi),]))
-    chroms <- c(seqnames(poi[breaks,]), seqnames(poi[length(poi),]))
-    gr <- GenomicRanges::GRanges(chroms, IRanges(starts, ends))
+  ## find ranges complying with the threshold
+  indx <- which(sums >= threshold)
+  if(length(indx) == 0) {
+    return(rowRanges(ggd)@pos_runs)
+  }
+  poi <- rowRanges(ggd)[indx,]
+  diffs <- abs(diff(pos(poi)))
+  breaks <- which(diffs > tileSize)
 
-    ## correct for ranges shorter than tile size
-    shortTiles <- which(width(gr) < tileSize)
-    gr[shortTiles,] <- flank(gr[shortTiles,], width = ceiling(tileSize/2), both = TRUE)
+  starts <- c(start(poi[1,]), start(poi[breaks + 1,]))
+  ends <- c(start(poi[breaks,]), start(poi[length(poi),]))
+  chroms <- c(seqnames(poi[breaks,]), seqnames(poi[length(poi),]))
+  gr <- GenomicRanges::GRanges(chroms, IRanges(starts, ends))
 
-    ## correct ranges outside of chromosome due to resize of short tiles
-    negRanges <- which(start(gr) < 1)
-    end(gr[negRanges,]) <- end(gr[negRanges,]) - start(gr[negRanges,]) + 1
-    start(gr[negRanges,]) <- 1
-    posRanges <- which(end(gr) > seqlengths(ggd)[as.character(seqnames(gr))])
-    start(gr[posRanges,]) <- start(gr[posRanges,]) - end(gr[posRanges,]) + seqlengths(ggd)[names(posRanges)]
-    end(gr[posRanges,]) <- seqlengths(ggd)[names(posRanges)]
+  ## correct for ranges shorter than tile size
+  shortTiles <- which(width(gr) < tileSize)
+  gr[shortTiles,] <- flank(gr[shortTiles,], width = ceiling(tileSize/2), both = TRUE)
 
-    seqlevels(gr, force = TRUE) <- seqlevelsInUse(gr)
-    res <- mergeRanges(gr, tileSize)
-    return(res)
+  ## correct ranges outside of chromosome due to resize of short tiles
+  negRanges <- which(start(gr) < 1)
+  end(gr[negRanges,]) <- end(gr[negRanges,]) - start(gr[negRanges,]) + 1
+  start(gr[negRanges,]) <- 1
+  posRanges <- which(end(gr) > seqlengths(ggd)[as.character(seqnames(gr))])
+  start(gr[posRanges,]) <- start(gr[posRanges,]) - end(gr[posRanges,]) + seqlengths(ggd)[names(posRanges)]
+  end(gr[posRanges,]) <- seqlengths(ggd)[names(posRanges)]
+
+  seqlevels(gr, force = TRUE) <- seqlevelsInUse(gr)
+  res <- mergeRanges(gr, tileSize)
+  return(res)
 }
 
 #' A filter function for |code{GenoGAMDataSet}
@@ -112,6 +115,10 @@ compute_filter <- function(ggd, threshold = NULL, windowsize = 201, mode = c("su
 #' @param windowsize The sliding window size. Should be an odd value.
 #' @param mode Should the sum or the mean of counts be used?
 #' @return A \code{GenoGAMDataSet} object containing the filtered regions
+#' @examples
+#' ggd <- makeTestGenoGAMDataSet()
+#' fdata <- filterData(ggd, windowsize = 10)
+#' fdata
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @export
 filterData <- function(ggd, threshold = NULL, windowsize = 201, mode = c("sum", "mean")) {

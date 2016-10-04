@@ -101,9 +101,10 @@ plotQC_hist <- function(object, plotPath) {
 #' @param ggd A \code{GenoGAMDataSet} object
 #' @param factorGroups A list representing the groups. Each element is a group containing
 #' the names of the samples belonging to it
+#' @param name A name specification for the file. Default is 'qc'
 #' @return NULL. A plot is saved to given directory
 #' @noRd
-qcGenoGAMDataSet <- function(ggd, factorGroups = list()) {
+qcGenoGAMDataSet <- function(ggd, factorGroups = list(), name = 'qc') {
 
     if(!requireNamespace("LSD", quietly = TRUE)) {
             stop("The 'LSD' package is required to plot proper heat-scatterplots. Please install it from CRAN", call. = FALSE)
@@ -119,8 +120,8 @@ qcGenoGAMDataSet <- function(ggd, factorGroups = list()) {
     timestamp <- gsub("-", "", timestamp)
     timestamp <- gsub(":", "", timestamp)
     timestamp <- gsub(" ", "_", timestamp)
-    hscatterFile <- paste0("qc_normalization_", timestamp, ".png")
-    densityFile <- paste0("qc_counts_", timestamp, ".png")
+    hscatterFile <- paste0(name, "_normalization_", timestamp, ".png")
+    densityFile <- paste0(name, "_counts_", timestamp, ".png")
 
     ## prepare count matrix
     countMat <- sum(ggd)[[1]]
