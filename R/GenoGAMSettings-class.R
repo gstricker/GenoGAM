@@ -37,7 +37,7 @@ setClass("GenoGAMSettings",
              bamParams = Rsamtools::ScanBamParam(what = c("pos", "qwidth")),
              parallel = BiocParallel::registered()[[1]],
              processFunction = identity,
-             optimMethod = "Nelder-Mead",
+             optimMethod = "BFGS",
              optimControl = list(maxit=100, fnscale=-1, trace = 10)))
 
 ## Validity
