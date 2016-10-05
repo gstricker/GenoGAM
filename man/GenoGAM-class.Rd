@@ -22,6 +22,8 @@ to the rows in the 'fits' slot.}
 \item{\code{smooths}}{A data.frame of knot positions and base function coefficients,
 in order to reproduce the splines and compute derivatives.}
 
+\item{\code{vcov}}{A list of covariance matrices for each tile fit.}
+
 \item{\code{experimentDesign}}{The design matrix according to which the fitting
 was performed.}
 

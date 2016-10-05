@@ -4,11 +4,11 @@
 \alias{plot.GenoGAM}
 \title{The pot function for a GenoGAM object}
 \usage{
-plot.GenoGAM(fit, ggd = NULL, ranges = NULL, seqnames = NULL,
-  start = NULL, end = NULL, scale = TRUE)
+plot.GenoGAM(x, ggd = NULL, ranges = NULL, seqnames = NULL,
+  start = NULL, end = NULL, scale = TRUE, ...)
 }
 \arguments{
-\item{fit}{A \code{GenoGAM} object}
+\item{x}{A \code{GenoGAM} object}
 
 \item{ggd}{A \code{GenoGAMDataSet} object to plot raw counts}
 
@@ -22,6 +22,8 @@ alternative way ob selecting a region}
 \item{end}{The end of a region}
 
 \item{scale}{Logical, should all tracks be scaled to the same y-axis?}
+
+\item{...}{Additional parameters that will be passed to the basic plot routine}
 }
 \value{
 A plot of all tracks either using the ggplot2 or the base R framework

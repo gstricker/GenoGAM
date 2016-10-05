@@ -32,9 +32,6 @@ merged.}
 to identify all significantly high positions, which then make up a broad peak.}
 
 \item{minregion}{For broad peaks only. The minimum length of a broad peak. By default 1, thus catching also narrow peaks.}
-
-\item{border}{The border type of narrow peaks. Since the fit is a function, those can be defiend by either the minimas
-around the peak (broader) or the inflection points (more narrow).}
 }
 \value{
 A data.table of identified peaks. The different columns loosely resemble the narrow and broad peak format
@@ -51,6 +48,17 @@ a 95\% confidence interval for the position, namely 'start' and 'end', which giv
 measure to the peak position. Also narrow peaks provide an occupancy estimate at the peak position, while broad peaks
 give the average occupancy accross the region.
 The columns returned are:
+}
+\examples{
+load(system.file("extdata/Set1/fit.rda", package='GenoGAM'))
+## calling narrow peaks
+peaks <- callPeaks(fit, smooth = "genotype", threshold = 1)
+peaks
+
+## calling broad peaks
+peaks <- callPeaks(fit, smooth = "genotype", threshold = 1, 
+                  peakType = "broad", cutoff = 0.75)
+peaks
 }
 \author{
 Georg Stricker \email{georg.stricker@in.tum.de}

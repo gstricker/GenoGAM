@@ -4,7 +4,7 @@
 \alias{computeRegionSignificance}
 \title{Compute significance for given regions}
 \usage{
-computeRegionSignificance(fit, regions, what)
+computeRegionSignificance(fit, regions, what = NULL)
 }
 \arguments{
 \item{fit}{A GenoGAM object containing the fit}
@@ -24,6 +24,11 @@ For a given set of regions, region-wise pvalues and FDR is computed
 For a given set of regions, region-wise pvalues are computed by applying
 familywise hochberg correction and taking the minimal p-value. FDR is computed by further
 applying Benjamini-Hochberg correction.
+}
+\examples{
+gg <- makeTestGenoGAM()
+gr <- GRanges("chrI", IRanges(1,100))
+computeRegionSignificance(gg, gr)
 }
 \author{
 Georg Stricker \email{georg.stricker@in.tum.de}

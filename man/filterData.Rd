@@ -24,6 +24,11 @@ A \code{GenoGAMDataSet} object containing the filtered regions
 A function to filter the |code{GenoGAMDataSet} by the sum or mean of counts to significantly reduce
 the amount of models to compute
 }
+\examples{
+ggd <- makeTestGenoGAMDataSet()
+fdata <- filterData(ggd, windowsize = 10)
+fdata
+}
 \author{
 Georg Stricker \email{georg.stricker@in.tum.de}
 }

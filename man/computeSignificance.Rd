@@ -17,6 +17,11 @@ A GenoGAM object which fits has been updated by the pvalue columns.
 \description{
 Based on the model fits this functions computes pointwise pvalues.
 }
+\examples{
+ggd <- makeTestGenoGAM()
+ggd <- computeSignificance(ggd)
+head(getFits(ggd))
+}
 \author{
 Georg Stricker \email{georg.stricker@in.tum.de}
 }
