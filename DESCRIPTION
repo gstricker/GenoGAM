@@ -1,7 +1,7 @@
 Package: GenoGAM
 Type: Package
 Title: A GAM based framework for analysis of ChIP-Seq data
-Version: 1.1.7
+Version: 1.1.8
 Date: 2016-10-05
 Authors@R: c(person("Georg", "Stricker", role = c("aut", "cre"), email
         = "georg.stricker@in.tum.de"), person("Alexander",
@@ -21,7 +21,7 @@ Description: This package allows statistical analysis of genome-wide
 License: GPL-2
 LazyData: true
 Depends:
-    R (>= 3.4),
+    R (>= 3.3),
     Rsamtools (>= 1.18.2),
     SummarizedExperiment (>= 1.1.19),
     GenomicRanges (>= 1.23.16),
