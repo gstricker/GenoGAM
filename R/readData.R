@@ -188,7 +188,7 @@
         }
     }
     
-    totalLen <- suppressWarnings(sum(elementNROWS(res)))
+    totalLen <- suppressWarnings(sum(elementLengths(res)))
     if(is.na(totalLen) | totalLen > 2^32) return(RleList(res, compress = FALSE))
     else return(RleList(res))
 }
@@ -262,11 +262,11 @@
     plusStrand <- reads[strand(reads) == "+",]
     negStrand <- reads[strand(reads) == "-",]
     if (asMates) {
-        plusFragments <- unlist(sapply(1:nrow(plusStrand), function(y) {
+        plusFragments <- unlist(sapply(1:length(plusStrand), function(y) {
             start(plusStrand[y,]):end(plusStrand[y,])
         }))
     
-        negFragments <- unlist(sapply(1:nrow(negStrand), function(y) {
+        negFragments <- unlist(sapply(1:length(negStrand), function(y) {
             start(negStrand[y,]):end(negStrand[y,])
         }))
     }
@@ -326,7 +326,7 @@
 #' @return A vector of midpoints.
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 .getPairedCenters <- function(chunk) {
-    if(nrow(chunk) == 0) return(integer())
+    if(length(chunk) == 0) return(integer())
     strand <- runValue(strand(chunk))
     if(strand == "+") {
         fragmentSize <-  end(last(chunk)) - start(first(chunk))

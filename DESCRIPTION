@@ -21,7 +21,7 @@ Description: This package allows statistical analysis of genome-wide
 License: GPL-2
 LazyData: true
 Depends:
-    R (>= 3.4),
+    R (>= 3.3),
     Rsamtools (>= 1.18.2),
     SummarizedExperiment (>= 1.1.19),
     GenomicRanges (>= 1.23.16),
@@ -67,6 +67,7 @@ Collate:
     'plotting.R'
     'qc.R'
     'readData.R'
+    'setup.R'
     'sf.R'
 URL: https://github.com/gstricker/GenoGAM
 BugReports: https://github.com/gstricker/GenoGAM/issues

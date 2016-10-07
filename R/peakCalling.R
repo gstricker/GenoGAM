@@ -564,25 +564,29 @@ writeToBEDFile <- function(peaks, file = NULL){
 #' @noRd
 writeToBroadPeaks <- function(peaks, file){
   res <- peaks[,list(seqnames, start, end)]
-  res$name <- factor(".")
-  res$score <- 0
-  res$strand <- factor(".")
+  res$start <- round(res$start)
+  res$end <- round(res$end)
+  res$name <- "."
+  res$score <- "0"
+  res$strand <- "."
   res$siganl <- peaks$meanSignal
   res$pvalue <- peaks$score
   res$qvalue <- peaks$fdr
-  write.table(peaks, file = file, row.names = FALSE, col.names = FALSE, sep = "/t")
+  write.table(res, file = file, row.names = FALSE, col.names = FALSE, sep = "\t", quote = FALSE)
 }
 
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @noRd
 writeToNarrowPeaks <- function(peaks, file){
   res <- peaks[,list(seqnames, start, end)]
-  res$name <- factor(".")
-  res$score <- 0
-  res$strand <- factor(".")
+  res$start <- round(res$start)
+  res$end <- round(res$end)
+  res$name <- "."
+  res$score <- "0"
+  res$strand <- "."
   res$summit <- peaks$summit
   res$pvalue <- peaks$score
   res$qvalue <- peaks$fdr
-  res$peak <- peaks$position - peaks$start
-  write.table(peaks, file = file, row.names = FALSE, col.names = FALSE, sep = "/t")
+  res$peak <- round(peaks$position - peaks$start)
+  write.table(res, file = file, row.names = FALSE, col.names = FALSE, sep = "\t", quote = FALSE)
 }

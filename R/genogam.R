@@ -135,6 +135,9 @@ genogam <- function(ggd, lambda = NULL, family = mgcv::nb(),
     ## initialize parameters for CV
     sp <- rep(lambda, nsplines)
     init <- .initCV(formula, data, family, sp, c(FIXLAMBDA, FIXTHETA), colData(ggd), sizeFactors(ggd))
+    if(!FIXLAMBDA) {
+      init$pars['lambda'] <- min(init$pars['lambda'], log(knots))
+    }
 
     ## get the tile ids for CV
     sumMatrix <- sum(ggd)
