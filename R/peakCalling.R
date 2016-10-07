@@ -570,7 +570,7 @@ writeToBroadPeaks <- function(peaks, file){
   res$siganl <- peaks$meanSignal
   res$pvalue <- peaks$score
   res$qvalue <- peaks$fdr
-  write.table(peaks, file = file, row.names = FALSE, col.names = FALSE, sep = "/t")
+  write.table(peaks, file = file, row.names = FALSE, col.names = FALSE, sep = "\t")
 }
 
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
@@ -584,5 +584,5 @@ writeToNarrowPeaks <- function(peaks, file){
   res$pvalue <- peaks$score
   res$qvalue <- peaks$fdr
   res$peak <- peaks$position - peaks$start
-  write.table(peaks, file = file, row.names = FALSE, col.names = FALSE, sep = "/t")
+  write.table(peaks, file = file, row.names = FALSE, col.names = FALSE, sep = "\t")
 }
