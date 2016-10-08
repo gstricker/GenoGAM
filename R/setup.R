@@ -69,7 +69,7 @@ setClass("GenoGAMSetup",
     NULL
 }
 
-.validateVCovType <- function(object) {
+.validateCovarianceType <- function(object) {
     if(class(slot(object, "vcov")) != "dgCMatrix") {
         return("'vcov' must be a dgCMatrix object")
     }
@@ -108,7 +108,7 @@ setClass("GenoGAMSetup",
 .validateGenoGAMSetup <- function(object) {
     c(.validateParamsType(object), .validateKnotsType(object),
       .validateDesignMatrixType(object), .validateBetaType(object),
-      .validateVCovType(object), .validatePenaltyMatrixType(object),
+      .validateCovarianceType(object), .validatePenaltyMatrixType(object),
       .validateFormulaType(object), .validateOffsetType(object),
       .validateFamilyType(object))
 }
