@@ -42,7 +42,7 @@ setClass("GenoGAMSetup",
 
 #' Validating the correct type
 .validateParamsType <- function(object) {
-    if(class(slot(object, "params")) != "lis") {
+    if(class(slot(object, "params")) != "list") {
         return("'params' must be a list object")
     }
     NULL
@@ -113,7 +113,7 @@ setClass("GenoGAMSetup",
       .validateFamilyType(object))
 }
 
-setValidity2("GenoGAM", .validateGenoGAMSetup)
+setValidity2("GenoGAMSetup", .validateGenoGAMSetup)
 
 #' Constructor
 #' @noRd
@@ -161,6 +161,26 @@ setupGenoGAM <- function(ggd, lambda = NULL, H = NULL, family = "nb", bpknots = 
                           family = family)
   
   return(ggsetup)
+}
+
+## Accessor function
+getSlot <- function(object, slot = c("params", "knots", "X",
+                                     "beta", "vcov", "S", "formula",
+                                     "offset", "family")) {
+  slot <- match.arg(slot)
+  
+  res <- switch(slot, 
+                params = object@params,
+                knots = object@knots,
+                X = object@designMatrix,
+                beta = object@beta,
+                vcov = object@vcov,
+                S = object@penaltyMatrix,
+                formula = object@formula,
+                offset = object@offset,
+                family = object@family
+                )
+  return(res)
 }
 
 #' A function to place knots for P-Splines
