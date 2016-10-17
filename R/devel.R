@@ -2,11 +2,78 @@
 ## load("/s/project/coreProm/peakCalling/sacCer2/rdata/tfiib_data.RData")
 ## library(Matrix)
 
+## ggs <- GenoGAM:::setupGenoGAM(ggd)
+## S <- GenoGAM:::buildSMatrix(268, 2)
+## ggs@penaltyMatrix <- S
+## knots <- generateKnotPositions(ggd, 20)
+## ggs@knots <- knots
 
+## ## in Development
+## .getTile2 <- function(gt, id) {
+##   index <- getIndexCoordinates(gt) ## this must be a fixed slot in GenomicTiles
+##   range <- ranges(index[index$id == id,])
+##   chrom <- as.character(GenomeInfoDb::seqnames(index[index$id == id,]))
+##   pos <- pos(rowRanges(gt)[range])
+##   counts <- assay(gt)[pos,]
+##   res <- DataFrame(seqnames = chrom, pos = pos)
+##   res <- cbind(res, counts)
+##   return(res)
+## }
 
+## #B spline basis
+## bspline <- function(x, k, ord = 2, derivative = 0) {
+##   res <- splines::spline.des(k, x, ord + 2, rep(derivative,length(x)), sparse=TRUE)$design
+##   return(res)
+## }
+
+## #' build a block matrix from a template submatrix and a design matrix
+## #' @noRd
+## blockMatrixFromDesignMatrix <- function(template, design) {
+##   ## create 4-dim array by 'inserting' the template into the desing matrix
+##   arr <- array(template, c(dim(template),dim(design)))
+##   dims <- dim(arr)
+##   multP <- c(3,4,1,2)
+##   reduceP <- c(3,1,4,2)
+##   ## permute array for correct multiplication
+##   multArr <- aperm(arr, multP)*as.vector(design)
+##   ## permute array for correct reduction
+##   reducedArr <- aperm(multArr, reduceP)
+##   ## reduce 4-dim array to 2-dim matrix
+##   dim(reducedArr) <- c(nrow(template)*nrow(design), ncol(template)*ncol(template))
+##   return(reducedArr)
+## }
+
+## #penalized likelihood to be maximized \ negbin
+## likelihood_penalized_negbin_log <- function(beta,X,y,offset,theta,lambda,S){
+##   n <- dim(X)[1]
+##   eta <- offset + X%*%beta
+##   mu <- exp(eta)
+##   aux1 <- theta + y
+##   aux2 <- theta + mu
+##   l <- sum(log(gamma(aux1)/(factorial(y)*gamma(theta)))) + t(y) %*% eta + n*theta*log(theta) - t(aux1) %*% log(aux2)
+##   pen <- t(beta) %*% S %*% beta
+##   return(l[1]-lambda*pen[1,1])
+## }  
+
+## #gradient of penalized likelihood \negbin
+## gradient_likelihood_penalized_negbin_log <- function(beta,X,y,offset,theta,lambda,S){
+##   eta <- offset + X%*%beta
+##   mu <- exp(eta)
+##   z <- (y-mu)/(1+mu/theta)
+##   res <- t(X)%*%z
+##   pen <- S %*% beta
+##   return (res[,1]-2*lambda*pen[,1])
+## }
+
+## genogam <- function(){
+## x <- as(bspline(x, knots, order),"dgTMatrix")
+## desigmMatrix <- coldata(ggd)
+## X <- blockMatrixFromDesignMatrix(x, designMatrix)
+  
+## }
 ## ############################ Tests
 
-## k <- placeKnots(1:5200, 260)
+## k <- GenoGAM:::placeKnots(1:5200, 260)
 ## x1 <- rep(1:2660,2)
 ## x2 <- rep(2541:5200,2)
 ## x <- rep(1:5200,2)
@@ -61,13 +128,6 @@
 ##            beta = "matrix"
 ##          )
 ## )
-
-## #B spline basis
-## bspline <- function(x, k, ord = 2, derivative = 0) {
-##   res <- splines::spline.des(k, x, ord + 2, rep(derivative,length(x)), sparse=TRUE)$design
-##   return(res)
-## }
-
 
 ## ## #create a banded matrix with 5 diagonals
 ## ## diag_5 <- function(upper1, upper2, main){

@@ -70,6 +70,9 @@ compute_filter <- function(ggd, threshold = NULL, windowsize = 201, mode = c("su
     }
     sumsMAD <- mad(sums)
     threshold <- sumsMedian + 6*sumsMAD
+    if(mode == "sum") {
+      threshold <- max(threshold, dim(ggd)[2])
+    }
     futile.logger::flog.info(paste("Threshold estimated at", threshold))
   }
 

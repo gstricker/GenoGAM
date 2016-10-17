@@ -57,6 +57,7 @@ Collate:
     'GenoGAM-class.R'
     'GenoGAM-package.R'
     'GenoGAMDataSet-class.R'
+    'GenoGAMSetup-class.R'
     'cv.R'
     'devel.R'
     'diffBinding.R'
@@ -67,7 +68,6 @@ Collate:
     'plotting.R'
     'qc.R'
     'readData.R'
-    'setup.R'
     'sf.R'
 URL: https://github.com/gstricker/GenoGAM
 BugReports: https://github.com/gstricker/GenoGAM/issues

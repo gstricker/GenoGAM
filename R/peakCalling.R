@@ -564,14 +564,14 @@ writeToBEDFile <- function(peaks, file = NULL){
 #' @noRd
 writeToBroadPeaks <- function(peaks, file){
   res <- peaks[,list(seqnames, start, end)]
-  res$start <- round(res$start)
-  res$end <- round(res$end)
+  res$start <- format(round(res$start), scientific = FALSE)
+  res$end <- format(round(res$end), scientific = FALSE)
   res$name <- "."
   res$score <- "0"
   res$strand <- "."
-  res$siganl <- peaks$meanSignal
-  res$pvalue <- peaks$score
-  res$qvalue <- peaks$fdr
+  res$siganl <- format(peaks$meanSignal, scientific = FALSE)
+  res$pvalue <- format(peaks$score, scientific = FALSE)
+  res$qvalue <- format(peaks$fdr, scientific = FALSE)
   write.table(res, file = file, row.names = FALSE, col.names = FALSE, sep = "\t", quote = FALSE)
 }
 
@@ -579,14 +579,14 @@ writeToBroadPeaks <- function(peaks, file){
 #' @noRd
 writeToNarrowPeaks <- function(peaks, file){
   res <- peaks[,list(seqnames, start, end)]
-  res$start <- round(res$start)
-  res$end <- round(res$end)
+  res$start <- format(round(res$start), scientific = FALSE)
+  res$end <- format(round(res$end), scientific = FALSE)
   res$name <- "."
   res$score <- "0"
   res$strand <- "."
-  res$summit <- peaks$summit
-  res$pvalue <- peaks$score
-  res$qvalue <- peaks$fdr
-  res$peak <- round(peaks$position - peaks$start)
+  res$summit <- format(peaks$summit, scientific = FALSE)
+  res$pvalue <- format(peaks$score, scientific = FALSE)
+  res$qvalue <- format(peaks$fdr, scientific = FALSE)
+  res$peak <- format(round(peaks$position - peaks$start), scientific = FALSE)
   write.table(res, file = file, row.names = FALSE, col.names = FALSE, sep = "\t", quote = FALSE)
 }

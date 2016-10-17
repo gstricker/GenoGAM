@@ -132,12 +132,6 @@ genogam <- function(ggd, lambda = NULL, family = mgcv::nb(),
 
   if(is.null(lambda) | is.null(theta)) {
     futile.logger::flog.info("Estimating parameters")
-    ## initialize parameters for CV
-    sp <- rep(lambda, nsplines)
-    init <- .initCV(formula, data, family, sp, c(FIXLAMBDA, FIXTHETA), colData(ggd), sizeFactors(ggd))
-    if(!FIXLAMBDA) {
-      init$pars['lambda'] <- min(init$pars['lambda'], log(knots))
-    }
 
     ## get the tile ids for CV
     sumMatrix <- sum(ggd)
@@ -147,6 +141,13 @@ genogam <- function(ggd, lambda = NULL, family = mgcv::nb(),
     }
     else ids <- 1:length(data)
     
+    ## initialize parameters for CV
+    sp <- rep(lambda, nsplines)
+    init <- .initCV(formula, data[ids], family, sp, c(FIXLAMBDA, FIXTHETA), colData(ggd), sizeFactors(ggd))
+    ## if(!FIXLAMBDA) {
+    ##   init$pars['lambda'] <- min(init$pars['lambda'], log(knots))
+    ## }
+
     ## perform CV
     params <- .doCrossValidation(init$pars, .loglik, data[ids], formula = formula,
                                  folds = kfolds, intervallSize = intervallSize,
