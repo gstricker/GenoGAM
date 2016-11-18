@@ -54,10 +54,10 @@
                     fixedpars = list(lambda = NULL, theta = NULL), ...){
     coords <- attr(gtiles, "settings")$chunks
     if(is.null(fixedpars$lambda)) {
-        lambda <- exp(pars[["lambda"]])
+        fixedpars$lambda <- exp(pars[["lambda"]])
     }
     if(is.null(fixedpars$theta)) {
-        theta <- exp(pars["theta"])
+        fixedpars$theta <- exp(pars["theta"])
     }
     
     fullpred <- lapply(1:length(gtiles), function(y) {
@@ -75,11 +75,16 @@
         trainset <- gtiles[[id$tiles]][-CV_intervals[[id$folds]],]
                     
         nvars <- length(.getVars(formula)) - 1
-        mod <- mgcv::gam(formula, data = trainset, family = mgcv::nb(theta=fixedpars$theta), method = "REML",
+        ## the unnaming of theta is needed since it's a named vector and nb() transforms it soemhow into a list within when the name is not dropped
+        mod <- mgcv::gam(formula, data = trainset, family = mgcv::nb(theta = unname(fixedpars$theta)), method = "REML",
                          sp = rep(fixedpars$lambda, nvars), ...)
             
         pred <- mgcv::predict.gam(mod, newdata = testset, type="response")
         return(pred)
+    }
+    
+    if(fixedpars$theta < 1e-3) {
+        fixedpars$theta <- 1e-3
     }
     
     cvs <- bplapply(1:nrow(ids), lambdaFun, ids = ids, gtiles = gtiles,
@@ -91,7 +96,7 @@
     }
 
     res <- lapply(1:length(fullpred), function(y) {
-        dens <- dnbinom(gtiles[[y]]$value, size = theta, mu = fullpred[[y]], log = TRUE)
+        dens <- dnbinom(gtiles[[y]]$value, size = unname(fixedpars$theta), mu = fullpred[[y]], log = TRUE)
         gtiles[[y]]$yhat <- fullpred[[y]]
         gtiles[[y]]$ll <- dens
         return(gtiles[[y]])

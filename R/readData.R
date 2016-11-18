@@ -89,7 +89,8 @@
                     path = path, indexFile = indexFile, params = params, 
                     processFUN = processFUN, args = args)
   
-    attr(res,"chunkId") <- chunkGRanges
+    res <- do.call(c,res)
+    ##attr(res,"chunkId") <- chunkGRanges
     return(res)
 }
 
@@ -213,7 +214,7 @@
 #' correlation or SISSR. See ?chipseq::estimate.mean.fraglen.
 #' @author Georg Stricker \email{stricker@@genzentrum.lmu.de}
 .processCountChunks <- function(chunk, paired, coords, center, ...) {
-    chrom <- as.character(unique(GenomeInfoDb::seqnames(chunk)))
+    chrom <- seqlevelsInUse(chunk)
 
     if(!paired) {
         chunk <- chunk[width(chunk) <= 2*median(width(chunk))]
@@ -225,18 +226,37 @@
 
     if(center) {
         fragments <- .centerFragments(chunk, asMates = paired, ...)
+
+        validFragments <- fragments[start(fragments) >= start(coords) &
+                               end(fragments) <= end(coords)]
     }
     else {
         fragments <- .countFragments(chunk, asMates = paired, ...)
+        
+        ## control for out of bounds fragments
+        splitStartFragments <- which(start(fragments) < start(coords) & start(fragments) > 0)
+        if(length(splitStartFragments) > 0) {
+            start(fragments[splitStartFragments]) <- start(coords)
+        }
+        splitEndFragments <- which(end(fragments) > end(coords) & end(fragments) <= seqlengths(chunk)[chrom])
+        if(length(splitEndFragments) > 0) {
+            end(fragments[splitEndFragments]) <- end(coords)
+        }
+
+        validFragments <- fragments[start(fragments) >= 1 &
+                                    end(fragments) <= seqlengths(chunk)[chrom]]
     }
-    validFragments <- fragments[fragments >= start(coords) &
-                                fragments <= end(coords)]
-    start <- min(validFragments)
-    end <- max(validFragments)
-    track <- Rle(0, end - start + 1)
-    track[(runValue(validFragments) - start + 1)] <- runLength(validFragments)
-    metadata(track) <- list(start = start, end = end, chrom = chrom)
-    return(track)
+
+    gr <- GenomicRanges::GRanges(chrom, validFragments, seqlengths = seqlengths(chunk))
+    return(gr)
+    ## ## compute coverage
+    ## track <- IRanges::coverage(fragments)
+    ## start <- min(validFragments)
+    ## end <- max(validFragments)
+    ## track <- Rle(0, end - start + 1)
+    ## track[(runValue(validFragments) - start + 1)] <- runLength(validFragments)
+    ## metadata(track) <- list(start = start, end = end, chrom = chrom)
+    ## return(track)
 }
 
 #' Summing up fragments given reads from a BAM file.
@@ -262,25 +282,45 @@
     plusStrand <- reads[strand(reads) == "+",]
     negStrand <- reads[strand(reads) == "-",]
     if (asMates) {
-        plusFragments <- unlist(sapply(1:length(plusStrand), function(y) {
-            start(plusStrand[y,]):end(plusStrand[y,])
-        }))
-    
-        negFragments <- unlist(sapply(1:length(negStrand), function(y) {
-            start(negStrand[y,]):end(negStrand[y,])
-        }))
+        plusFragments <- getFragments(plusStrand)   
+        negFragments <- getFragments(negStrand)
     }
     else {
         granges_reads <- granges(reads)
         fraglen <- chipseq::estimate.mean.fraglen(granges_reads, method =
                                                   match.arg(shiftMethod),
                                                   ...)
-        plusFragments <- start(plusStrand):(start(plusStrand) + fraglen)
-        negFragments <- (end(negStrand) - fraglen):end(fraglen)
+        plusFragments <- ranges(plusStrand)
+        end(plusFragments) <- start(plusStrand) + fraglen
+        
+        negFragments <- ranges(negStrand)
+        start(negFragments) <- end(negStrand) - fraglen
     }
-    midpoints <- sort(as.integer(floor(c(plusFragments,negFragments))))
-    return(Rle(midpoints))
+
+    allFragments <- sort(c(plusFragments,negFragments))
+    return(allFragments)
 }
+
+getFragments <- function(chunk){
+    if(length(chunk) == 0) return(integer())
+    strand <- runValue(strand(chunk))
+    if(strand == "+") {
+        temp <- ranges(first(chunk))
+        end(temp) <- end(last(chunk))
+    }
+    if(strand == "-") {
+        temp <- ranges(last(chunk))
+        end(temp) <- end(first(chunk))
+    }
+    maxAllowedFragSize <- 2*median(width(temp))
+    falseFragments <- which(width(temp) > maxAllowedFragSize)
+    if (length(falseFragments) > 0) {
+        temp <- temp[-falseFragments]
+    }
+    
+    return(temp)
+}
+
 
 #' A function to center fragments.
 #'
@@ -313,11 +353,15 @@
         fraglen <- chipseq::estimate.mean.fraglen(granges_reads, method =
                                                   match.arg(shiftMethod),
                                                   ...)
-        plusMidpoints <- start(plusStrand) + fraglen/2
-        negMidpoints <- end(negStrand) - fraglen/2
+        plusMidpoints <- ranges(plusStrand)
+        start(plusMidpoints) <- end(plusMidpoints) <- start(plusStrand) + fraglen/2
+        
+        negMidpoints <- ranges(negStrand)
+        end(negMidpoints) <- start(negMidpoints) <- end(negStrand) - fraglen/2
     }
-    midpoints <- sort(as.integer(floor(c(plusMidpoints,negMidpoints))))
-    return(Rle(midpoints))
+
+    midpoints <- sort(c(plusMidpoints,negMidpoints))
+    return(midpoints)
 }
 
 #' A function to get the fragment centers
@@ -336,14 +380,17 @@
         fragmentSize <-  end(first(chunk)) - start(last(chunk))
         midpoints <- (start(last(chunk)) + end(first(chunk)))/2
     }
+    
+    temp <- IRanges::IRanges(start = midpoints, end = midpoints)
+    start(temp) <- end(temp) <- midpoints    
+
     maxAllowedFragSize <- 2*median(fragmentSize)
     falseFragments <- which(fragmentSize > maxAllowedFragSize)
     
     if (length(falseFragments) > 0) {
-        midpoints <- midpoints[-falseFragments]
+        temp <- temp[-falseFragments]
     }
-    midpoints <- sort(as.integer(floor(midpoints)))
-    return(midpoints)
+    return(temp)
 }
 
 ## Read functions
@@ -415,7 +462,9 @@
                     c(list(path = path, chromosomeList = chromosomeList,
                            processFUN = processFUN, asMates = asMates),
                       list(...)))
-    res <- .combineTrack(data, chromosomeLengths)
+    seqlevels(data) <- seqlevelsInUse(data)
+    res <- IRanges::coverage(data)
+    #res <- .combineTrack(data, chromosomeLengths)
     
     return(res)
 }

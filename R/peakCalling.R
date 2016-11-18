@@ -391,7 +391,8 @@ computePeakSignificance <- function(fit, peaks, x) {
     sum(v$zscore >= y)/sum(p$zscore >= y)
   })
   fdr[is.nan(fdr)] <- 0
-  if(nrow(v) > nrow(p)) fdr <- fdr*(nrow(p)/nrow(v)) ## correct for different size of valleys and peaks to avoid FDR > 1
+  fdr <- pmin(1, fdr)
+  ##if(nrow(v) > nrow(p)) fdr <- fdr*(nrow(p)/nrow(v)) ## correct for different size of valleys and peaks to avoid FDR > 1
   peaks <- p
   peaks$type <- NULL
   peaks$score <- -pnorm(-peaks$zscore, log.p = TRUE)

@@ -35,7 +35,12 @@ computeSizeFactors <- function(ggd, factorGroups = NULL) {
             dds <- .normalize(sumMatrix[,elem], factor(elem))
             sf <- c(sf, log(DESeq2::sizeFactors(dds)))
         }
-
+    idx <- which(!(colnames(ggd) %in% names(sf)))
+    if(length(idx) >0) {
+        zeros <- rep(0, length(idx))
+        names(zeros) <- colnames(ggd)[idx]
+        sf <- c(sf, zeros)
+    }
     ## add to GenomicTiles
     slot(ggd, "sizeFactors") <- sf
 
@@ -66,12 +71,13 @@ computeSizeFactors <- function(ggd, factorGroups = NULL) {
 #' @return A vector of log-pvalues.
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 .deseq <- function(countMatrix, factors) {
-    factors <- as.factor(factors)
+    ##factors <- as.factor(factors)
+    form <- as.formula(paste0("~", paste(names(factors), collapse = "+")))
         
     dds <- DESeq2::DESeqDataSetFromMatrix(
         countData = countMatrix,
-        colData = DataFrame(condition = factors),
-        design = ~condition)
+        colData = factors,
+        design = form)
 
     dds <- DESeq2::DESeq(dds)
     ans <- DESeq2::results(dds)

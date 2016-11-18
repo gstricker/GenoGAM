@@ -34,7 +34,7 @@
         theta <- init$family$getTheta()
         lambda <- init$full.sp
     }
-    if(is.null(lambda)) lambda <- mean(init$sp)
+    if(is.null(lambda)) lambda <- exp(mean(log(init$sp)))
 
     if(fixedPars[1]) {
         pars <- c(theta = theta)
@@ -136,8 +136,14 @@ genogam <- function(ggd, lambda = NULL, family = mgcv::nb(),
     ## get the tile ids for CV
     sumMatrix <- sum(ggd)
     if(ncv >= 20) {
-      pvals <- suppressMessages(suppressWarnings(.deseq(sumMatrix[[1]], names(sizeFactors(ggd)))))
-      ids <- order(pvals)[1:ncv]
+        if(sum(sapply(colData(ggd), sum)) == nrow(colData(ggd))) {
+            rsums <- rowSums(sumMatrix[[1]])
+            ids <- order(rsums, decreasing = TRUE)[1:ncv]
+        }
+        else {
+            pvals <- suppressMessages(suppressWarnings(.deseq(sumMatrix[[1]], colData(ggd))))
+            ids <- order(pvals)[1:ncv]
+        }
     }
     else ids <- 1:length(data)
     
