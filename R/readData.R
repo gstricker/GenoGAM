@@ -89,7 +89,8 @@
                     path = path, indexFile = indexFile, params = params, 
                     processFUN = processFUN, args = args)
   
-    res <- do.call(c,res)
+    idx <- !sapply(res, is.null)
+    res <- do.call(c,res[idx])
     ##attr(res,"chunkId") <- chunkGRanges
     return(res)
 }
