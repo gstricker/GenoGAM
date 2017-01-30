@@ -1,6 +1,3 @@
-## TODO:
-## - Do we need the covariance slot?
-
 #################
 ## Setup class ##
 #################
@@ -29,13 +26,17 @@
 setClass("GenoGAMSetup",
          slots = list(params = "list", knots = "list",
                       designMatrix = "dgCMatrix", beta = "matrix",
-                      vcov = "dgCMatrix", penaltyMatrix = "dgCMatrix", 
-                      formula = "formula", offset = "numeric", family = "character"),
-         prototype = list(params = list(lambda = 0, H = matrix()),
+                      vcov = "dgCMatrix", penaltyMatrix = "dgCMatrix",
+                      formula = "formula", offset = "numeric", 
+                      family = "character", response = "numeric",
+                      fits = "numeric"),
+         prototype = list(params = list(lambda = 0, theta = 0, H = 0,
+                                        order = 2, penorder = 2),
                           knots = list(), designMatrix = new("dgCMatrix"),
                           beta = matrix(), vcov = new("dgCMatrix"),
                           penaltyMatrix = new("dgCMatrix"), formula = ~1,
-                          offset = numeric(), family = "nb"))
+                          offset = numeric(), family = "nb", 
+                          response = numeric(), fits = numeric()))
 
 ## Validity
 ## ========
@@ -104,13 +105,28 @@ setClass("GenoGAMSetup",
     NULL
 }
 
+.validateResponseType <- function(object) {
+    if(class(slot(object, "response")) != "numeric") {
+        return("'response' must be a numeric object")
+    }
+    NULL
+}
+
+.validateFitsType <- function(object) {
+    if(class(slot(object, "fits")) != "numeric") {
+        return("'fits' must be a numeric object")
+    }
+    NULL
+}
+
 ## general validate function
 .validateGenoGAMSetup <- function(object) {
     c(.validateParamsType(object), .validateKnotsType(object),
       .validateDesignMatrixType(object), .validateBetaType(object),
       .validateCovarianceType(object), .validatePenaltyMatrixType(object),
       .validateFormulaType(object), .validateOffsetType(object),
-      .validateFamilyType(object))
+      .validateFamilyType(object), .validateResponseType(object),
+      .validateFitsType(object))
 }
 
 setValidity2("GenoGAMSetup", .validateGenoGAMSetup)
@@ -123,7 +139,7 @@ GenoGAMSetup <- function(...) {
 
 #' Constructor function
 #' @noRd
-setupGenoGAM <- function(ggd, lambda = NULL, H = NULL, family = "nb", bpknots = 20, order = 2, penorder = 2) {
+setupGenoGAM <- function(ggd, lambda = NULL, theta = NULL, H = 0, family = "nb", bpknots = 20, order = 2, penorder = 2) {
 
   ## knot placement
   knots <- generateKnotPositions(ggd, bpknots)
@@ -135,45 +151,12 @@ setupGenoGAM <- function(ggd, lambda = NULL, H = NULL, family = "nb", bpknots = 
   ## formula handling
   formula <- design(ggd)
 
-  ## How many splines?
-  vars <- .getVars(formula, "covar")
-  nsplines <- length(vars)
-
-  ## param initialization
-  if(is.null(lambda)) lambda <- 0
-  if(is.null(H)) {
-    H <- matrix(0, nbetas*nsplines, nbetas*nsplines)
-  }
-  
-  ## penaltyMatrix
-  S <- buildSMatrix(nbetas*nsplines, penorder)
-
-  ggsetup <- GenoGAMSetup(params = list(lambda = lambda, H = H),
-                          knots = knots, penaltyMatrix = S,
-                          formula = formula, offset = sizeFactors(ggd),
-                          family = family)
+    ggsetup <- GenoGAMSetup(params = list(lambda = lambda, theta = theta, H = H,
+                                          order = order, penorder = penorder),
+                            knots = knots, formula = formula, 
+                            offset = sizeFactors(ggd), family = family)
   
   return(ggsetup)
-}
-
-## Accessor function
-getSlot <- function(object, slot = c("params", "knots", "X",
-                                     "beta", "vcov", "S", "formula",
-                                     "offset", "family")) {
-  slot <- match.arg(slot)
-  
-  res <- switch(slot, 
-                params = object@params,
-                knots = object@knots,
-                X = object@designMatrix,
-                beta = object@beta,
-                vcov = object@vcov,
-                S = object@penaltyMatrix,
-                formula = object@formula,
-                offset = object@offset,
-                family = object@family
-                )
-  return(res)
 }
 
 #' A function to generate knots genome-wide for P-Splines,
@@ -186,13 +169,16 @@ generateKnotPositions <- function(ggd, bpknots = 20){
   x <- pos(positions)
   knots <- placeKnots(x = x, nknots = nknots)
 
-  chroms <- seqlengths(ggd) 
-  res <- lapply(names(chroms), function(chr) {
-    idx <- which(knots < chroms[chr])
-    ans <- knots[c(idx, c(1:4 + length(idx)))]
-    return(ans)
-  })
-  names(res) <- names(chroms)
+  ## chroms <- seqlengths(ggd) 
+  ## res <- lapply(names(chroms), function(chr) {
+  ##   idx <- which(knots < chroms[chr])
+  ##   ans <- knots[c(idx, c(1:4 + length(idx)))]
+  ##   return(ans)
+  ## })
+  ## names(res) <- names(chroms)
+  ## return(res)
+  res <- list(knots)
+  names(res) <- referenceChrom
   return(res)
 }
 
@@ -222,3 +208,32 @@ buildSMatrix <- function(p, order) {
   for (i in 1:order) S = diff(S) ## twice the difference
   S = t(S)%*%S ## square
 }
+
+#' A function to build the identity matrix I with multiple epsilon
+#' Courtesy to Simon Wood (mgcv)
+#' @noRd
+buildIMatrix <- function(p, epsilon) {
+  I = Matrix(diag(p), sparse = TRUE) ##initialize a diagonal identity matrix
+  return(epsilon*I)
+}
+
+
+## Test
+## ======
+
+## library(GenoGAM)
+## library(Matrix)
+## FOLDER <- "/s/project/coreProm/Michi/thornton/align_STAR"
+## CONFIG <- "~/workspace/analysis/diffBinding/config.txt"
+## config <- data.table::fread(CONFIG)
+## BiocParallel::register(BiocParallel::SnowParam(workers=4))
+
+## BPPK <- 20
+## CHUNKSIZE <- BPPK*1000
+## OV <- BPPK*10
+
+## ggd <- GenoGAMDataSet(CONFIG, chunkSize = CHUNKSIZE,
+##                       overhangSize = OV, design = ~ s(x) + s(x, by = genotype),
+##                       directory = FOLDER)
+## ggd <- computeSizeFactors(ggd)
+## ggs <- setupGenoGAM(ggd)

@@ -384,7 +384,9 @@ setGeneric("getIndex", function(object, ...) standardGeneric("getIndex"))
 #' @export
 setMethod("getIndex", signature(object = "GenomicTiles"), function(object, id = NULL) {
     idx <- slot(object, "index")
-    if(!is.null(id)) idx[mcols(idx)$id %in% id]
+    if(!is.null(id)) {
+        idx <- idx[mcols(idx)$id %in% id]
+    }
     return(idx)
 })
 

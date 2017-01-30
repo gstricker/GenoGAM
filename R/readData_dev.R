@@ -65,10 +65,10 @@
         regions <- GenomicRanges::GRanges(names(chromosomeLengths), IRanges::IRanges(starts, ends))
     }
     
-    lambdaFun <- function(chromName, regions, asMates, path, indexFile, params, processFUN, args) {
+    lambdaFun <- function(chromName, chromosomeCoords, asMates, path, indexFile, params, processFUN, args) {
         ## read data
         ##suppressPackageStartupMessages(require(GenoGAM, quietly = TRUE))
-        Rsamtools::bamWhich(params) <- regions[GenomeInfoDb::seqnames(regions) == chromName,]
+        Rsamtools::bamWhich(params) <- chromosomeCoords[GenomeInfoDb::seqnames(regions) == chromName,]
         if (asMates) reads <- GenomicAlignments::readGAlignmentPairs(path, index = indexFile, param = params)
         else reads <- GenomicAlignments::readGAlignments(path, index = indexFile, param = params)
         
@@ -81,7 +81,8 @@
         return(ans)
     }
     ## run BAM reading in parallel. Check backend by bpparam().
-    res <- BiocParallel::bplapply(names(chromosomeLengths), lambdaFun, regions = regions, asMates = asMates, 
+    ## res <- BiocParallel::bplapply(names(chromosomeLengths), lambdaFun, chromosomeCoords = regions, asMates = asMates, 
+    res <- lapply(names(chromosomeLengths), lambdaFun, chromosomeCoords = regions, asMates = asMates, 
                     path = path, indexFile = indexFile, params = params, 
                     processFUN = processFUN, args = args)
     ## necessary to identify null entries in list, e.g. if only a subset of 
@@ -89,7 +90,7 @@
     ## non-null elements in the list the combine method will produce different
     ## results.
     idx <- !sapply(res, is.null)
-    res <- do.call(c,res[idx])
+    res <- res[idx]
     return(res)
 }
 
@@ -298,7 +299,11 @@
     if (suffix == "bed") {
         res <- .readBED()
     }
-    return(res)
+    grl <- GenomicRanges::GRangesList(res)
+    GenomeInfoDb::seqlevels(grl) <- GenomeInfoDb::seqlevelsInUse(grl)
+    coverageRle <- IRanges::coverage(grl)
+    GenomeInfoDb::seqlengths(coverageRle) <- GenomeInfoDb::seqlengths(grl)
+    return(coverageRle)
 }
     
 #' Read and process raw data
@@ -332,144 +337,65 @@
 #' gt <- readData(path,chromosomeList)
 #' }
 #' @author Georg Stricker \email{stricker@@genzentrum.lmu.de}
-.readData <- function(path, chromosomeList = NULL, asMates = TRUE, processFUN = NULL, ...) {
-
-    header <- Rsamtools::scanBamHeader(path)
-    chromosomeLengths <- header[[1]]$targets
-    
-    if(!is.null(chromosomeList)) {
-        chromosomeLengths <- chromosomeLengths[names(chromosomeLengths) %in% chromosomeList]
-    }
+.readData <- function(path, chromosomeList = NULL, asMates = TRUE, processFUN = NULL, hdf5 = FALSE, ...) {
 
     data <- do.call(.readRawData,
                     c(list(path = path, chromosomeList = chromosomeList,
                            processFUN = processFUN, asMates = asMates),
                       list(...)))
-    seqlevels(data) <- seqlevelsInUse(data)
-    res <- IRanges::coverage(data)
-    #res <- .combineTrack(data, chromosomeLengths)
-    
+    lengths <- GenomeInfoDb::seqlengths(data)
+    if(hdf5 | sum(as.numeric(lengths)) > 2^31) {
+        res <- writeToHDF5(data)
+    }
+
+    start <- proc.time()
+    res <- useHDF5(data)
+    proc.time() - start
+
     return(res)
 }
 
-## Mappability (deprecated for now)
-## ===============================
-
-## #' Read mappability data.
-## #'
-## #' The function reads in a BAM file and returns a list of logical vectors for each chromosome,
-## #' indicating if the position is mappable or not. This function is not intended for direct use.
-## #' However one might parse this data differently, than the package does. Therefore the
-## #' function is made available.
-## #'
-## #' @param path A character object indicating the path to the BAM file.
-## #' @param ... Any other parameters supplying to \code{\link{readRawData}}.
-## #' @return An RleList consisting of logical-Rle objects, where each objects has the length
-## #' length(chromosome) representing if a position on the given chromosome is mappable or not.
-## #' @author Georg Stricker \email{stricker@@genzentrum.lmu.de}
-## readMapBAM <- function(path, chromosomeList = NULL, ...) {
-
-##     if(is.null(chromosomeList)) {
-##         header <- Rsamtools::scanBamHeader(path)
-##         chromosomeList <- header[[1]]$targets
-##     }
-    
-##     temp <- readRawData(path, chromosomeList = chromosomeList, processFUN = .processMappabilityChunks, ...)
-##     res <- .combineTrack(temp, chromosomeList, init = FALSE)
-##     return(res)
-## }
-
-## #' Processing raw data and convert to logical.
-## #'
-## #' This function processes the data read from BAM files and converts them to logical type.
-## #' @param chunk An object of type GAlignments
-## #' @return An Rle object of logical values indicating for each position, if it is mappabale or not.
-## #' @author Georg Stricker \email{stricker@@genzentrum.lmu.de}
-## .processMappabilityChunks <- function(chunk) {
-##     centeredFragments <- .centerFragments(chunk, asMates = TRUE)
-##     start <- min(centeredFragments)
-##     end <- max(centeredFragments)
-##     chrom <- as.character(unique(seqnames(chunk)))
-##     track <- Rle(FALSE, end - start + 1)
-##     track[(runValue(centeredFragments) - start + 1)] <- TRUE
-##     track@metadata <- list(start = start, end = end, chromosome = chrom)
-##     return(track)
-## }
-
-
-## #' A function to parse centered BAM files to a GRanges object of mappable regions.
-## #'
-## #' The function takes in a logical-RleList indicating the mappability of each position in the genome and returns
-## #' a GRanges object of mappable regions. This function is not intended to be used directly.
-## #'
-## #' @param obj A logical RleList, where each list object represents one chromosome
-## #' @param winsize The size for the moving window. Should be odd, one will be added if this isn't the case.
-## #' Default: 101
-## #' @param mincov The minimal coverage of TRUE values within the moving window as a fraction. Every position
-## #' above this value will be regarded as mappable.
-## #' @param minlength The minimal length of consecutive mappabale positions that form one mappable region.
-## #' Every region below that length will be marked unmappable.
-## #' @return A GRanges object of mappable regions
-## #' @details A moving window of size 'winsize' is used to compute the fraction of mappable position in the
-## #' genome. Each position above the 'mincov' value is regarded as mappable. Consecutive mappable positions
-## #' are gathered to form a region. if the region is longer than 'minlength' it forms a mappable region.
-## #' @author Georg Stricker \email{stricker@@genzentrum.lmu.de}
-## parseMappability <- function(obj, winsize = 101, mincov = 0.5, minlength = 1000) {
-##     if (winsize %% 2 == 0) winsize <- winsize+1
-
-##     chromosomeList <- names(obj)
-##     res <- bplapply(chromosomeList, function(chromosome) {
-##         require(genoGAM, quietly = TRUE)
-##         binary_mappability <- obj[[chromosome]]*1
-##         mappability_MA <- runmean(binary_mappability, k = winsize, endrule = "constant")
-##         boolean_mappability <- Rle(ifelse(mappability_MA < mincov, FALSE, TRUE))
-        
-##         ## Set TRUE stretches of < MIN_LENGTH to FALSE:     
-##         indx <- runValue(boolean_mappability) == TRUE & runLength(boolean_mappability) < minlength
-##         runValue(boolean_mappability)[indx] <- FALSE
-        
-##         mappability_region <- GRanges(seqnames = chromosome,
-##                                       ranges = IRanges(start = start(boolean_mappability),
-##                                           end = end(boolean_mappability)),
-##                                       mapable = runValue(boolean_mappability))
-        
-##         return(mappability_region)
-##     })
-##     names(res) <- chromosomeList
-##     return(GRangesList(res))
-## }
-
-## #' Read and convert raw mappability data
-## #'
-## #' This is a convenience function for reading and parsing raw data from multiple formats (at the moment
-## #' only BAM is supported) and converting to a list containing the mappability track and mappable region
-## #'
-## #' @param path A character object indicating the path to the source file
-## #' @param winsize The size for the moving window. Should be odd, one will be added if this isn't the case.
-## #' Default: 101
-## #' @param mincov The minimal coverage of TRUE values within the moving window as a fraction. Every position
-## #' above this value will be regarded as mappable.
-## #' @param minlength The minimal length of consecutive mappabale positions that form one mappable region.
-## #' Every region below that length will be marked unmappable.
-## #' @param ... Further parameters that can be passed to \code{\link{readMapBAM}}.
-## #' @return A GRanges object of mappable regions
-## #' @examples
-## #' \dontrun{
-## #' path <- "path/to/mappability.bam"
-## #' map <- readMappability(path)
-## #' map <- readData(path,asMates=FALSE,readByChromosome = TRUE)
-## #' mappabilityTrack <- map$track
-## #' mappabilityRegions <- map$regions
-## #' }
-## #' @author Georg Stricker \email{stricker@@genzentrum.lmu.de}
-## readMappability <- function(path, winsize = 101, mincov = 0.5, minlength = 1000, ...) {
-
-##     data <- readMapBAM(path, ...)
-##     mapRegions <- parseMappability(data, winsize = winsize, mincov = mincov, minlength = minlength)
-##     res <- list(track = data, regions = mapRegions)
-    
-##     return(res)
-## }
+useHDF5 <- function(input) {
+    total <- 0
+    da <- HDF5Array::DelayedArray(S4Vectors::DataFrame(X1 = as.numeric(input[[1]])))
+    start <- proc.time()
+    h5 <- HDF5Array::HDF5Array(da)
+    cat("Initiation: \n")
+    passed <- proc.time() - start
+    total <- total + passed["elapsed"]
+    print(passed)
+    rm(da)
+    gc()
+    for(ii in 2:length(input)) {
+        da <- HDF5Array::DelayedArray(S4Vectors::DataFrame(X1 = as.numeric(input[[ii]])))
+        start <- proc.time()
+        temp <- HDF5Array::HDF5Array(da)
+        cat("Write ", names(input)[ii],  " to HDF5: \n")
+        passed <- proc.time() - start
+        total <- total + passed["elapsed"]
+        print(passed)
+        start <- proc.time()
+        h5 <- rbind(h5, temp)
+        cat("Combine: \n")
+        passed <- proc.time() - start
+        total <- total + passed["elapsed"]
+        print(passed)
+        rm(list = c("da", "temp"))
+        gc()
+    }
+    cat("Total time spend in minutes: ", total/60 "\n")
+    ## lengths <- GenomeInfoDb::seqlengths(input)
+    ## cumLengths <- cumsum(as.numeric(lengths))
+    ## cutPoint <- which(cumLengths < 2^31)
+    ## pre <- unlist(input[cutPoint])
+    ## post <- unlist(input[-cutPoint])
+    ## preda <- HDF5Array::DelayedArray(S4Vectors::DataFrame(X1 = pre))
+    ## postda <- HDF5Array::DelayedArray(S4Vectors::DataFrame(X1 = post))
+    ## h5 <- HDF5Array::HDF5Array(preda)
+    ## rest <- HDF5Array::HDF5Array(postda)
+    ## h5 <- rbind(h5, rest)
+    return(h5)
+}
 
 ################## Tests
 # ======================
