@@ -99,7 +99,7 @@ compute_filter <- function(ggd, threshold = NULL, windowsize = 201, mode = c("su
   start(gr[posRanges,]) <- start(gr[posRanges,]) - end(gr[posRanges,]) + seqlengths(ggd)[names(posRanges)]
   end(gr[posRanges,]) <- seqlengths(ggd)[names(posRanges)]
 
-  seqlevels(gr, force = TRUE) <- seqlevelsInUse(gr)
+  seqlevels(gr, pruning.mode="coarse") <- seqlevelsInUse(gr)
   res <- mergeRanges(gr, tileSize)
   return(res)
 }

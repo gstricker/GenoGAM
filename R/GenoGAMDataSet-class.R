@@ -215,7 +215,7 @@ GenoGAMDataSet <- function(experimentDesign, chunkSize, overhangSize, design,
     GenomeInfoDb::seqlengths(chromosomeLengths) <- chroms
     chromosomeList <- getDefaults(settings, "chromosomeList")
     if(!is.null(chromosomeList)) {
-        GenomeInfoDb::seqlevels(chromosomeLengths, force = TRUE) <- chromosomeList
+        GenomeInfoDb::seqlevels(chromosomeLengths, pruning.mode="coarse") <- chromosomeList
         chroms <- chroms[names(chroms) %in% chromosomeList]
     }
 

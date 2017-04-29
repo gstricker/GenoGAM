@@ -297,7 +297,7 @@ GenomicTiles <- function(assays, chunkSize = 1e4, overhangSize = 0, ...) {
 
   tiles <- do.call("c", tileList)
   seqlengths(tiles) <- seqlengths(l$chromosomes)
-  seqlevels(tiles, force = TRUE) <- seqlevelsInUse(tiles)
+  seqlevels(tiles, pruning.mode="coarse") <- seqlevelsInUse(tiles)
   
   ## add 'id' and 'dist' column and put settings in metadata
   mcols(tiles)$id <- 1:length(tiles)
@@ -843,8 +843,8 @@ setMethod("checkSettings", "GenomicTiles", function(object) {
 Only the ones matching will be used")
     }
     idx <- getIndex(object)
-    GenomeInfoDb::seqlevels(idx, force = TRUE) <- value
-    GenomeInfoDb::seqlevels(metadata(idx)$chromosomes, force = TRUE) <- value
+    GenomeInfoDb::seqlevels(idx, pruning.mode="coarse") <- value
+    GenomeInfoDb::seqlevels(metadata(idx)$chromosomes, pruning.mode="coarse") <- value
     metadata(idx)$numTiles <- length(idx)
     slot(object, "index") <- idx
     return(object)
@@ -975,10 +975,10 @@ setMethod("as.data.frame", "GenomicTiles", function(x) {
     se <- subset(SummarizedExperiment(assays = assays(x),
                                       rowRanges = rowRanges(x),
                                       colData = colData(x)), ...)
-    GenomeInfoDb::seqlevels(rowRanges(se), force = TRUE) <- GenomeInfoDb::seqlevelsInUse(rowRanges(se))
+    GenomeInfoDb::seqlevels(rowRanges(se), pruning.mode="coarse") <- GenomeInfoDb::seqlevelsInUse(rowRanges(se))
 
     indeces <- .subsetIndeces(se, getIndex(x))
-    GenomeInfoDb::seqlevels(metadata(indeces$index)$chromosomes, force = TRUE) <- GenomeInfoDb::seqlevelsInUse(rowRanges(se))
+    GenomeInfoDb::seqlevels(metadata(indeces$index)$chromosomes, pruning.mode="coarse") <- GenomeInfoDb::seqlevelsInUse(rowRanges(se))
     return(new("GenomicTiles", index = indeces$index,
                coordinates = indeces$coordinates, se))
 }
@@ -1031,11 +1031,11 @@ setMethod("subset", "GenomicTiles", function(x, ...) {
     tiles <- subsetByOverlaps(index, subject)
     se <- subsetByOverlaps(SummarizedExperiment(assay, rowRanges = rowRanges, colData = colData),
                            tiles, ...)
-    GenomeInfoDb::seqlevels(rowRanges(se), force = TRUE) <- GenomeInfoDb::seqlevelsInUse(rowRanges(se))
-    GenomeInfoDb::seqlevels(tiles, force = TRUE) <- GenomeInfoDb::seqlevelsInUse(tiles)
+    GenomeInfoDb::seqlevels(rowRanges(se), pruning.mode="coarse") <- GenomeInfoDb::seqlevelsInUse(rowRanges(se))
+    GenomeInfoDb::seqlevels(tiles, pruning.mode="coarse") <- GenomeInfoDb::seqlevelsInUse(tiles)
     if(length(metadata(tiles)) > 0) {
         metadata(tiles)$numTiles <- length(tiles)
-        GenomeInfoDb::seqlevels(metadata(tiles)$chromosomes, force = TRUE) <- GenomeInfoDb::seqlevelsInUse(tiles)
+        GenomeInfoDb::seqlevels(metadata(tiles)$chromosomes, pruning.mode="coarse") <- GenomeInfoDb::seqlevelsInUse(tiles)
     }
     
     coords <- .makeCoordinates(rowRanges(se))
@@ -1053,13 +1053,13 @@ setMethod("subset", "GenomicTiles", function(x, ...) {
 
     se <- subsetByOverlaps(SummarizedExperiment(assay, rowRanges = rowRanges, colData = colData),
                            subject, ...)
-    GenomeInfoDb::seqlevels(rowRanges(se), force = TRUE) <- GenomeInfoDb::seqlevelsInUse(rowRanges(se))
+    GenomeInfoDb::seqlevels(rowRanges(se), pruning.mode="coarse") <- GenomeInfoDb::seqlevelsInUse(rowRanges(se))
     
     settings$chromosomes <- slot(rowRanges(se), "pos_runs")
     tiles <- .makeTiles(settings)
-    GenomeInfoDb::seqlevels(tiles, force = TRUE) <- GenomeInfoDb::seqlevelsInUse(rowRanges(se))
+    GenomeInfoDb::seqlevels(tiles, pruning.mode="coarse") <- GenomeInfoDb::seqlevelsInUse(rowRanges(se))
     if(length(metadata(tiles)) > 0) {
-        GenomeInfoDb::seqlevels(metadata(tiles)$chromosomes, force = TRUE) <- GenomeInfoDb::seqlevelsInUse(tiles)
+        GenomeInfoDb::seqlevels(metadata(tiles)$chromosomes, pruning.mode="coarse") <- GenomeInfoDb::seqlevelsInUse(tiles)
     }
     
     coords <- .makeCoordinates(rowRanges(se))
