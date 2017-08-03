@@ -61,7 +61,7 @@ plot.GenoGAM <- function(x, ggd = NULL, ranges = NULL, seqnames = NULL,
     inputData <- assay(ggd)[indx,]
     inputData[] <- lapply(names(inputData), function(y) inputData[[y]]/exp(sizeFactors(ggd)[y]))
   }
-  title <- as.character(loc[indx]@pos_runs)
+  title <- as.character(.extractGR(loc[indx])
 
   ## if(require(Gviz)) {
   ##   plot_gviz()

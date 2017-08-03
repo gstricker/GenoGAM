@@ -131,8 +131,7 @@ GenomicTiles <- function(assays, chunkSize = 1e4, overhangSize = 0, ...) {
 .GenomicTilesFromSE <- function(assays, chunkSize, overhangSize) {
     
     chroms <- GenomeInfoDb::seqlevelsInUse(assays)
-    gr <- rowRanges(assays)@pos_runs
-
+    gr <- .extractGR(rowRanges(assays))
     tileSize <- chunkSize + 2*overhangSize
     l <- list(chromosomes = gr,
               chunkSize = chunkSize,
@@ -163,7 +162,7 @@ GenomicTiles <- function(assays, chunkSize = 1e4, overhangSize = 0, ...) {
 #' @return An object of class GenomicTiles.
 .GenomicTilesFromRawData <- function(assays, chunkSize, overhangSize, ...) {
     rowRanges <- list(...)$rowRanges
-    gr <- rowRanges@pos_runs
+    gr <- .extractGR(rowRanges)
 
     tileSize <- chunkSize + 2*overhangSize
     l <- list(chromosomes = gr,
@@ -330,7 +329,7 @@ GenomicTiles <- function(assays, chunkSize = 1e4, overhangSize = 0, ...) {
 #' @param gp A GPos object.
 #' @return A GRanges object of the row coordinates.
 .makeCoordinates <- function(gp) {
-    gpCoords <- gp@pos_runs
+    gpCoords <- .extractGR(gp)
     chroms <- seqnames(gpCoords)
     if(length(gpCoords) > 0) {
         widths <- width(gpCoords)
@@ -358,6 +357,10 @@ makeTestGenomicTiles <- function() {
     return(gt2)
 }
 
+.extractGR <- function(gp) {
+    res <- GRanges(runValue(seqnames(gp)), ranges(gp)@pos_runs)
+    return(res)
+}
 
 ## Accessors
 ## =========
@@ -411,7 +414,7 @@ setMethod("getChunkIndex", "GenomicTiles", function(object, id = NULL) {
   index <- getIndex(object)
   if(length(index) == 0) return(index)
   rowCoords <- getCoordinates(object)
-  gpCoords <- slot(rowRanges(object), "pos_runs")
+  gpCoords <- .extractGR(rowRanges(object))
   GenomeInfoDb::seqlengths(index) <- rep(NA, length(GenomeInfoDb::seqlengths(index)))
   index$block <- subjectHits(findOverlaps(index, gpCoords))
     
@@ -528,7 +531,7 @@ setMethod("getIndexCoordinates", "GenomicTiles", function(object, id = NULL, ind
         index <- getIndex(object)
     }
     rowCoords <- getCoordinates(object)
-    gpCoords <- slot(rowRanges(object), "pos_runs")
+    gpCoords <- .extractGR(rowRanges(object))
     GenomeInfoDb::seqlengths(index) <- rep(NA, length(GenomeInfoDb::seqlengths(index)))
     index$block <- subjectHits(findOverlaps(index, gpCoords))
 
@@ -566,12 +569,12 @@ setGeneric("dataRange", function(object) standardGeneric("dataRange"))
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @export
 setMethod("dataRange", "GenomicTiles", function(object) {
-    rowRanges(object)@pos_runs
+    .extractGR(rowRanges(object))
 })
 
 #' @rdname dataRange
 setMethod("dataRange", "GPos", function(object) {
-    ranges(object@pos_runs)
+    ranges(object)@pos_runs
 })
 
 #' @rdname tileSettings-elements
@@ -942,7 +945,7 @@ setMethod("as.data.frame", "GenomicTiles", function(x) {
 #' @return A list of two GRanges objects: the subsetted index and the
 #' subsetted coordinates.
 .subsetIndeces <- function(se, index) {
-    gpCoords <- rowRanges(se)@pos_runs
+    gpCoords <- .extractGR(rowRanges(se))
     gpDims <- length(gpCoords)
     ir <- IRanges(start = cumsum(c(1, end(gpCoords)[-gpDims[1]])),
                   end = cumsum(width(gpCoords)))
@@ -1055,7 +1058,7 @@ setMethod("subset", "GenomicTiles", function(x, ...) {
                            subject, ...)
     GenomeInfoDb::seqlevels(rowRanges(se), pruning.mode="coarse") <- GenomeInfoDb::seqlevelsInUse(rowRanges(se))
     
-    settings$chromosomes <- slot(rowRanges(se), "pos_runs")
+    settings$chromosomes <- .extractGR(rowRanges(se))
     tiles <- .makeTiles(settings)
     GenomeInfoDb::seqlevels(tiles, pruning.mode="coarse") <- GenomeInfoDb::seqlevelsInUse(rowRanges(se))
     if(length(metadata(tiles)) > 0) {

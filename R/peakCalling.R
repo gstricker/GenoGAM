@@ -514,7 +514,7 @@ computeBroadPeakSignificance <- function(fit, peakDF, smooth) {
     return(data.table())
   }
   bp <- peakDF
-  regions <- peakDF@pos_runs
+  regions <- .extractGR(peakDF)
   indx <- queryHits(findOverlaps(slot(fit, "positions"), regions))
   bp$region <- subjectHits(findOverlaps(bp, regions))
   bp$estimate <- exp(slot(fit, "fits")[indx, smooth])
