@@ -76,7 +76,7 @@ compute_filter <- function(ggd, threshold = NULL, windowsize = 201, mode = c("su
   ## find ranges complying with the threshold
   indx <- which(sums >= threshold)
   if(length(indx) == 0) {
-    return(.extractGR(rowRanges(ggd))
+    return(.extractGR(rowRanges(ggd)))
   }
   poi <- rowRanges(ggd)[indx,]
   diffs <- abs(diff(pos(poi)))
