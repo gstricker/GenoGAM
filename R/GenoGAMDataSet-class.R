@@ -458,13 +458,13 @@ setMethod("subset", "GenoGAMDataSet", function(x, ...) {
 #' gr <- GRanges("chrI", IRanges(1,50))
 #' res <- subsetByOverlaps(ggd, gr)
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
-setMethod("subsetByOverlaps", c("GenoGAMDataSet", "GRanges"),
-          function(query, subject, maxgap=0L, minoverlap=1L,
+setMethod("subsetByOverlaps", signature("GenoGAMDataSet", "GRanges"),
+          function(x, ranges, maxgap=0L, minoverlap=1L,
                       type=c("any", "start", "end", "within", "equal"),...) {
               settings <- getSettings(query)
               design <- design(query)
               sf <- sizeFactors(query)
-              subgt <- .subsetByOverlaps(query, subject, maxgap=maxgap,
+              subgt <- .subsetByOverlaps(x, ranges, maxgap=maxgap,
                                          minoverlap=minoverlap,
                                          type=type,...)
               settings <- setDefaults(settings, chromosomeList = GenomeInfoDb::seqlevels(subgt))
