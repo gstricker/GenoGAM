@@ -1010,28 +1010,28 @@ setMethod("subset", "GenomicTiles", function(x, ...) {
 #' subsetByOverlaps method applying to SummarizedExperiment.
 #' Additionally the index and coordinates gets subsetted.
 #'
-#' @param query A GenomicTiles object.
-#' @param subject A GRanges object.
+#' @param x A GenomicTiles object.
+#' @param ranges A GRanges object.
 #' @param ... Any other parameters applicable to subset a
 #' SummarizedExperiment by overlaps.
 #' @return A subsetted GenomicTiles object.
-.subsetGenomicTilesByOverlaps <- function(query, subject, ...){
-    se <- subsetByOverlaps(SummarizedExperiment(assays = assays(query),
-                                      rowRanges = rowRanges(query)),
-                           subject, ...)
-    indeces <- .subsetIndeces(se, getIndex(query))
+.subsetGenomicTilesByOverlaps <- function(x, ranges, ...){
+    se <- subsetByOverlaps(SummarizedExperiment(assays = assays(x),
+                                      rowRanges = rowRanges(x)),
+                           ranges, ...)
+    indeces <- .subsetIndeces(se, getIndex(x))
     return(new("GenomicTiles", index = indeces$index,
                coordinates = indeces$coordinates, se))
 }
 
-.subsetByOverlaps <- function(query, subject, maxgap, minoverlap,
+.subsetByOverlaps <- function(x, ranges, maxgap, minoverlap,
                               type, ...) {
-    rowRanges <- rowRanges(query)
-    assay <- assays(query)
-    index <- getIndex(query)
-    colData <- colData(query)
+    rowRanges <- rowRanges(x)
+    assay <- assays(x)
+    index <- getIndex(x)
+    colData <- colData(x)
 
-    tiles <- subsetByOverlaps(index, subject)
+    tiles <- subsetByOverlaps(index, ranges)
     se <- subsetByOverlaps(SummarizedExperiment(assay, rowRanges = rowRanges, colData = colData),
                            tiles, ...)
     GenomeInfoDb::seqlevels(rowRanges(se), pruning.mode="coarse") <- GenomeInfoDb::seqlevelsInUse(rowRanges(se))
@@ -1048,14 +1048,14 @@ setMethod("subset", "GenomicTiles", function(x, ...) {
     return(res)
 }
 
-.exactSubsetByOverlaps <- function(query, subject, ...) {
-    rowRanges <- rowRanges(query)
-    assay <- assays(query)
-    settings <- tileSettings(query)
-    colData <- colData(query)
+.exactSubsetByOverlaps <- function(x, ranges, ...) {
+    rowRanges <- rowRanges(x)
+    assay <- assays(x)
+    settings <- tileSettings(x)
+    colData <- colData(x)
 
     se <- subsetByOverlaps(SummarizedExperiment(assay, rowRanges = rowRanges, colData = colData),
-                           subject, ...)
+                           ranges, ...)
     GenomeInfoDb::seqlevels(rowRanges(se), pruning.mode="coarse") <- GenomeInfoDb::seqlevelsInUse(rowRanges(se))
     
     settings$chromosomes <- .extractGR(rowRanges(se))
@@ -1076,29 +1076,10 @@ setMethod("subset", "GenomicTiles", function(x, ...) {
 #'
 #' Subsetting the \code{GenomicTiles} by a \code{GRanges} object
 #'
-#' @param query A \code{GenomicTiles} object.
-#' @param subject A \code{GRanges} object
-#' @param maxgap,minoverlap Intervals with a separation of \code{maxgap} or
-#' less and a minimum of \code{minoverlap} overlapping positions, allowing for
-#' \code{maxgap}, are considered to be overlapping.  \code{maxgap} should
-#' be a scalar, non-negative, integer. \code{minoverlap} should be a scalar,
-#' positive integer.
-#' @param type By default, any overlap is accepted. By specifying the \code{type}
-#' parameter, one can select for specific types of overlap. The types correspond
-#' to operations in Allen's Interval Algebra (see references). If \code{type}
-#' is \code{start} or \code{end}, the intervals are required to have matching
-#' starts or ends, respectively. While this operation seems trivial, the naive
-#' implementation using \code{outer} would be much less efficient. Specifying
-#' \code{equal} as the type returns the intersection of the \code{start} and
-#' \code{end} matches. If \code{type} is \code{within}, the query interval must
-#' be wholly contained within the subject interval. Note that all matches must
-#' additionally satisfy the \code{minoverlap} constraint described above.
-#'
-#' The \code{maxgap} parameter has special meaning with the special
-#' overlap types. For \code{start}, \code{end}, and \code{equal}, it specifies
-#' the maximum difference in the starts, ends or both, respectively. For
-#' \code{within}, it is the maximum amount by which the query may be wider
-#' than the subject.
+#' @param x A \code{GenomicTiles} object.
+#' @param ranges A \code{GRanges} object
+#' @param maxgap,minoverlap,type See \code{?\link[IRanges]{findOverlaps}} in
+#' the \pkg{IRanges} package for a description of these arguments.
 #' @param ... Additional parameters
 #' @return A subsetted \code{GenomicTiles} object.
 #' @examples
@@ -1107,9 +1088,9 @@ setMethod("subset", "GenomicTiles", function(x, ...) {
 #' res <- subsetByOverlaps(gt, gr)
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 setMethod("subsetByOverlaps", c("GenomicTiles", "GRanges"),
-          function(query, subject, maxgap=0L, minoverlap=1L,
+          function(x, ranges, maxgap=-1L, minoverlap=0L,
                       type=c("any", "start", "end", "within", "equal"), ...) {
-              .subsetByOverlaps(query, subject, maxgap = maxgap,
+              .subsetByOverlaps(x, ranges, maxgap = maxgap,
                                 minoverlap = minoverlap,
                                 type = type, ...)
           })

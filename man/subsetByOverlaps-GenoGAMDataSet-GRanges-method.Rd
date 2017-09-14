@@ -5,37 +5,17 @@
 \alias{subsetByOverlaps,GenoGAMDataSet,GRanges-method}
 \title{Subset by overlaps method for \code{GenoGAMDataSet}}
 \usage{
-\S4method{subsetByOverlaps}{GenoGAMDataSet,GRanges}(query, subject,
-  maxgap = 0L, minoverlap = 1L, type = c("any", "start", "end", "within",
+\S4method{subsetByOverlaps}{GenoGAMDataSet,GRanges}(x, ranges,
+  maxgap = -1L, minoverlap = 0L, type = c("any", "start", "end", "within",
   "equal"), ...)
 }
 \arguments{
-\item{query}{A \code{GenoGAMDataSet} object.}
+\item{x}{A \code{GenoGAMDataSet} object.}
 
-\item{subject}{A \code{GRanges} object}
+\item{ranges}{A \code{GRanges} object}
 
-\item{maxgap, minoverlap}{Intervals with a separation of \code{maxgap} or
-less and a minimum of \code{minoverlap} overlapping positions, allowing for
-\code{maxgap}, are considered to be overlapping.  \code{maxgap} should
-be a scalar, non-negative, integer. \code{minoverlap} should be a scalar,
-positive integer.}
-
-\item{type}{By default, any overlap is accepted. By specifying the \code{type}
-parameter, one can select for specific types of overlap. The types correspond
-to operations in Allen's Interval Algebra (see references). If \code{type}
-is \code{start} or \code{end}, the intervals are required to have matching
-starts or ends, respectively. While this operation seems trivial, the naive
-implementation using \code{outer} would be much less efficient. Specifying
-\code{equal} as the type returns the intersection of the \code{start} and
-\code{end} matches. If \code{type} is \code{within}, the query interval must
-be wholly contained within the subject interval. Note that all matches must
-additionally satisfy the \code{minoverlap} constraint described above.
-
-The \code{maxgap} parameter has special meaning with the special
-overlap types. For \code{start}, \code{end}, and \code{equal}, it specifies
-the maximum difference in the starts, ends or both, respectively. For
-\code{within}, it is the maximum amount by which the query may be wider
-than the subject.}
+\item{maxgap, minoverlap, type}{See \code{?\link[IRanges]{findOverlaps}} in
+the \pkg{IRanges} package for a description of these arguments.}
 
 \item{...}{Additional parameters}
 }

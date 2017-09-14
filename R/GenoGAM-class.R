@@ -316,17 +316,16 @@ setMethod("subset", "GenoGAM", function(x, ...) {
 #'
 #' Subsetting the \code{GenoGAM} by a \code{GRanges} object
 #'
-#' @param query A \code{GenoGAM} object.
-#' @param subject A \code{GRanges} object
-#' @param ... Additional parameters
+#' @param x A \code{GenoGAM} object.
+#' @param ranges A \code{GRanges} object
 #' @return A subsetted \code{GenoGAM} object.
 #' @examples
 #' gg <- makeTestGenoGAM()
 #' gr <- GRanges("chrI", IRanges(1,40))
 #' subsetByOverlaps(gg, gr)
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
-setMethod("subsetByOverlaps", "GenoGAM", function(query, subject) {
-    .subsetByRanges(query, subject)
+setMethod("subsetByOverlaps", "GenoGAM", function(x, ranges) {
+    .subsetByRanges(x, ranges)
 })
 
 #' View the dataset

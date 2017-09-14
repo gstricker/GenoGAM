@@ -1,8 +1,8 @@
 Package: GenoGAM
 Type: Package
 Title: A GAM based framework for analysis of ChIP-Seq data
-Version: 1.5.5
-Date: 2017-04-29
+Version: 1.5.6
+Date: 2017-09-14
 Authors@R: c(person("Georg", "Stricker", role = c("aut", "cre"), email
         = "georg.stricker@in.tum.de"), person("Alexander",
         "Engelhardt", role = c("aut"), email =
@@ -24,7 +24,7 @@ Depends:
     R (>= 3.3),
     Rsamtools (>= 1.18.2),
     SummarizedExperiment (>= 1.1.19),
-    GenomicRanges (>= 1.23.16),
+    GenomicRanges (>= 1.29.14),
     methods
 Imports:
     BiocParallel (>= 1.5.17),
@@ -33,7 +33,7 @@ Imports:
     futile.logger (>= 1.4.1),
     GenomeInfoDb (>= 1.7.6),
     GenomicAlignments (>= 1.7.17),
-    IRanges (>= 2.5.30),
+    IRanges (>= 2.11.16),
     mgcv (>= 1.8),
     reshape2 (>= 1.4.1),
     S4Vectors (>= 0.9.34),

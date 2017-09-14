@@ -5,14 +5,12 @@
 \alias{subsetByOverlaps,GenoGAM,ANY-method}
 \title{Subset by overlaps method for \code{GenoGAM}}
 \usage{
-\S4method{subsetByOverlaps}{GenoGAM,ANY}(query, subject)
+\S4method{subsetByOverlaps}{GenoGAM,ANY}(x, ranges)
 }
 \arguments{
-\item{query}{A \code{GenoGAM} object.}
+\item{x}{A \code{GenoGAM} object.}
 
-\item{subject}{A \code{GRanges} object}
-
-\item{...}{Additional parameters}
+\item{ranges}{A \code{GRanges} object}
 }
 \value{
 A subsetted \code{GenoGAM} object.
