@@ -292,7 +292,8 @@ GenomicTiles <- function(assays, chunkSize = 1e4, overhangSize = 0, ...) {
     return(tiles)
   }
 
-  tileList <- BiocParallel::bplapply(l$chromosomes, lambdaFun, sl = l)
+  tileList <- BiocParallel::bplapply(as(l$chromosomes, "GRangesList"),
+                                     lambdaFun, sl = l)
 
   tiles <- do.call("c", tileList)
   seqlengths(tiles) <- seqlengths(l$chromosomes)
