@@ -13,6 +13,5 @@ A /code{GenoGAM} object
 Make an example /code{GenoGAM}
 }
 \examples{
-test <- makeTestGenoGAM()
+gg <- makeTestGenoGAM()
 }
-

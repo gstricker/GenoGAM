@@ -7,7 +7,7 @@
 writeToBEDFile(peaks, file = NULL)
 }
 \arguments{
-\item{peaks}{A data.table or data.frame of peaks as produced by callPeaks()}
+\item{peaks}{A data.table or data.frame of peaks as produced by 'callPeaks'}
 
 \item{file}{A file name without suffix. It will be determined automatically. If no
 file is given, it will be written to a generic 'peaks_[timestamp]' file in the
@@ -19,7 +19,12 @@ Nothing. A narrowPeaks or broadPeaks file written to 'file'
 \description{
 A function to write the data.table of peaks into a narrowPeaks or broadPeaks file
 }
+\details{
+Note, the narrow peak calling process does not yet implement any functionality
+for estimating the start and end of a peak region. Thus the start and end is taken as -100
+and +100 around the peak summit. This is mostly an arbitrary choice. A more statistical
+approach is in development.
+}
 \author{
 Georg Stricker \email{georg.stricker@in.tum.de}
 }
-

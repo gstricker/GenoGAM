@@ -3,15 +3,43 @@
 \docType{class}
 \name{GenoGAMSettings-class}
 \alias{GenoGAMSettings-class}
+\alias{GenoGAMSettings}
 \title{GenoGAMSettings}
+\usage{
+GenoGAMSettings(...)
+}
+\arguments{
+\item{...}{Any parameters corresponding to the slots and their possible
+values.}
+}
+\value{
+An object of class GenoGAMSettings
+}
 \description{
-This class is designed to store settings for the computation of the
+This class is designed to store global settings for the computation of the
 GenoGAM package
 }
 \details{
 Center can have three values: TRUE, FALSE, NULL. TRUE will
 trigger the center function, FALSE will trigger the use of the entire
 fragment. NULL should be used in case a custom process function is used.
+In case a custom function is used, it has to satisfy the following:
+It has to handle a GAlignments object as input and output a 
+GRanges object of regions, e.g. fragments. This regions are in turn used
+to compute the coverage via the IRanges::coverage function. Note, that there
+is a difference between the GAlignments object in the single and paired end
+case.
+
+optimControl has two maxit fields: 'maxit' refers to the maximal iterations
+in the cross validation procedure. Convergence rarely exceeds 50. 'betaMaxit'
+refers to the maximum iterations in estimation of the beta parameters.
+Convergence will sometimes need up to 1000 iterations. Also the parameter
+'trace' is overwritten. Please use the threshold setting through
+futile.logger::flog() to control trace information. All other parameters can
+be used as specified in ?optim. Note that the method used to estimate the
+beta vector is 'L-BFGS-B'. The method for cross validation can be changed.
+Keep in mind however, that not all methods will work, as it is not gradient
+based.
 }
 \section{Slots}{
 
@@ -24,19 +52,45 @@ represent its coverage. See details.}
 NULL for all chromosomes.}
 
 \item{\code{bamParams}}{An object of class ScanBamParam.
-See ?Rsamtools::ScanBamParam.}
-
-\item{\code{parallel}}{A parallel backend of the respective class. See
-BiocParalell for the options}
+See ?Rsamtools::ScanBamParam for possible settings. Usually used to set
+specific ranges, to read in.}
 
 \item{\code{processFunction}}{A custom function on how to process raw data. Not
-used if center is TRUE/FALSE.}
+used if center is TRUE/FALSE. This is not intended for the user, but if
+needed anyway, see details.}
 
-\item{\code{optimMethod}}{The optiomisation method to be used in cross validation.}
+\item{\code{optimMethod}}{The optiomisation method to be used in cross validation.
+See ?optim for a complete list.}
 
-\item{\code{optimControl}}{Settings for the optim() function.}
+\item{\code{optimControl}}{List of control settings for the optim function.
+Almost all parameters are supported, with a couple of exceptions. See
+details. For a complete list of parameters see ?optim.}
+
+\item{\code{estimControl}}{List of control settings for the parameter estimation algorithm.}
+
+\item{\code{hdf5Control}}{List of control settings for the HDF5 backend}
+
+\item{\code{dataControl}}{List of control settings for the processed data.
+The size of the region to use for the computation of the
+count matrix, that is later used by DESeq2. Also the size of the regions that
+will be used for Cross Validation. And the spacing between knots.}
 }}
+
+\examples{
+# Construct the class
+GenoGAMSettings()
+
+# Construct the class with custom parameters
+## specify chromosomes
+center <- FALSE
+chromosomeList <- c('chr1', 'chr2')
+GenoGAMSettings(center = center, chromosomeList = chromosomeList)
+
+## Specify ranges
+gr <- GenomicRanges::GRanges("chr1", IRanges(1, 10000))
+bamParams <- Rsamtools::ScanBamParam(which = gr)
+GenoGAMSettings(bamParams = bamParams, center = TRUE)
+}
 \author{
 Georg Stricker \email{georg.stricker@in.tum.de}
 }
-

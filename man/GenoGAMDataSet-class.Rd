@@ -3,24 +3,305 @@
 \docType{class}
 \name{GenoGAMDataSet-class}
 \alias{GenoGAMDataSet-class}
+\alias{GenoGAMDataSet}
+\alias{getIndex}
+\alias{tileSettings}
+\alias{dataRange}
+\alias{getChromosomes}
+\alias{getTileSize}
+\alias{getChunkSize}
+\alias{getOverhangSize}
+\alias{getTileNumber}
+\alias{getChunkSize<-}
+\alias{getTileSize<-}
+\alias{getOverhangSize<-}
+\alias{getTileNumber<-}
+\alias{getIndex,GenoGAMDataSet-method}
+\alias{getCountMatrix,GenoGAMDataSet-method}
+\alias{tileSettings,GenoGAMDataSet-method}
+\alias{dataRange,GenoGAMDataSet-method}
+\alias{getChromosomes,GenoGAMDataSet-method}
+\alias{getTileSize,GenoGAMDataSet-method}
+\alias{getChunkSize,GenoGAMDataSet-method}
+\alias{getOverhangSize,GenoGAMDataSet-method}
+\alias{getTileNumber,GenoGAMDataSet-method}
+\alias{is.HDF5,GenoGAMDataSet-method}
+\alias{design,GenoGAMDataSet-method}
+\alias{design<-,GenoGAMDataSet,ANY-method}
+\alias{sizeFactors,GenoGAMDataSet-method}
+\alias{sizeFactors<-,GenoGAMDataSet,ANY-method}
+\alias{getChunkSize<-,GenoGAMDataSet,numeric-method}
+\alias{getTileSize<-,GenoGAMDataSet,numeric-method}
+\alias{getOverhangSize<-,GenoGAMDataSet,numeric-method}
+\alias{getTileNumber<-,GenoGAMDataSet,numeric-method}
 \title{GenoGAMDataSet}
+\usage{
+GenoGAMDataSet(experimentDesign, design, chunkSize = NULL,
+  overhangSize = NULL, directory = ".", settings = NULL,
+  hdf5 = FALSE, split = hdf5, fromHDF5 = FALSE, ignoreM = FALSE,
+  ...)
+
+\S4method{getIndex}{GenoGAMDataSet}(object)
+
+\S4method{getCountMatrix}{GenoGAMDataSet}(object)
+
+\S4method{tileSettings}{GenoGAMDataSet}(object)
+
+\S4method{dataRange}{GenoGAMDataSet}(object)
+
+\S4method{getChromosomes}{GenoGAMDataSet}(object)
+
+\S4method{getTileSize}{GenoGAMDataSet}(object)
+
+\S4method{getChunkSize}{GenoGAMDataSet}(object)
+
+\S4method{getOverhangSize}{GenoGAMDataSet}(object)
+
+\S4method{getTileNumber}{GenoGAMDataSet}(object)
+
+\S4method{is.HDF5}{GenoGAMDataSet}(object)
+
+\S4method{design}{GenoGAMDataSet}(object)
+
+\S4method{design}{GenoGAMDataSet,ANY}(object) <- value
+
+\S4method{sizeFactors}{GenoGAMDataSet}(object)
+
+\S4method{sizeFactors}{GenoGAMDataSet,ANY}(object) <- value
+
+\S4method{getChunkSize}{GenoGAMDataSet,numeric}(object) <- value
+
+\S4method{getTileSize}{GenoGAMDataSet,numeric}(object) <- value
+
+\S4method{getOverhangSize}{GenoGAMDataSet,numeric}(object) <- value
+
+\S4method{getTileNumber}{GenoGAMDataSet,numeric}(object) <- value
+}
+\arguments{
+\item{experimentDesign}{Either a character object specifying the path to a
+delimited text file (the delimiter will be determined automatically),
+a data.frame specifying the experiment design or a RangedSummarizedExperiment
+object with the GPos class being the rowRanges. See details for the structure
+of the experimentDesign.}
+
+\item{design}{A formula object. See details for its structure.}
+
+\item{chunkSize}{An integer specifying the size of one chunk in bp.}
+
+\item{overhangSize}{An integer specifying the size of the overhang in bp.
+As the overhang is taken to be symmetrical, only the overhang of one side
+should be provided.}
+
+\item{directory}{The directory from which to read the data. By default
+the current working directory is taken.}
+
+\item{settings}{A GenoGAMSettings object. Not needed by default, but might
+be of use if only specific regions should be read in.
+See \code{\link{GenoGAMSettings}}.}
+
+\item{hdf5}{Should the data be stored on HDD in HDF5 format? By default this
+is disabled, as the Rle representation of count data already provides a
+decent compression of the data. However in case of large organisms, a complex
+experiment design or just limited memory, this might further decrease the
+memory footprint. Note this only applies to the input count data, results are
+usually stored in HDF5 format due to their space requirements for type double.
+Exceptions are small organisms like yeast.}
+
+\item{split}{A logical argument specifying if the data should be stored as
+a list split by chromosome. This is useful and necessary for huge organisms like
+human, as R does not support long integers.}
+
+\item{fromHDF5}{A logical argument specifying if the data is already present in
+form of HDF5 files and should be rather read in from there.}
+
+\item{ignoreM}{A logical argument to ignore the Mitochondria DNA on data read in.
+This is useful, if one is not interested in chrM, but it's size prevents the tiles
+to be larger, as all tiles has to be of some size.}
+
+\item{...}{Further parameters, mostly for arguments of custom processing
+functions or to specify a different method for fragment size estimation.
+See details for further information.}
+
+\item{object}{For use of S4 methods. The GenoGAMDataSet object.}
+
+\item{value}{For use of S4 methods. The value to be assigned to the slot.}
+}
+\value{
+An object of class \code{\link{GenoGAMDataSet}} or the respective slot.
+}
 \description{
-This class is designed to represent the input for the GenoGAM model.
-it extends the GenomicTiles class.
+The GenoGAMDataSet class contains the pre-processed raw data and
+additional slots that define the input and framework for the model.
+It extends the RangedSummarizedExperiment class by adding an index
+that defines ranges on the entire genome, mostly for purposes of
+parallel evaluation. Furthermore adding a couple more slots to hold
+information such as experiment design. It also contains the
+\code{\link[GenoGAM]{GenoGAMSettings}} class that defines global
+settings for the session. For information on the slots inherited from
+SummarizedExperiment check the respective class.
+
+GenoGAMDataSet is the constructor function for the GenoGAMDataSet-class.
 }
-\details{
-For all other slots see SummarizedExperiment.
-}
+\section{Methods (by generic)}{
+\itemize{
+\item \code{getIndex}: An accessor to the index slot
+
+\item \code{getCountMatrix}: An accessor to the countMatrix slot
+
+\item \code{tileSettings}: The accessor to the list of settings,
+that were used to generate the tiles.
+
+\item \code{dataRange}: The actual underlying GRanges showing
+the range of the data.
+
+\item \code{getChromosomes}: A GRanges object representing the chromosomes
+or chromosome regions on which the model will be computed
+
+\item \code{getTileSize}: The size of the tiles
+
+\item \code{getChunkSize}: The size of the chunks
+
+\item \code{getOverhangSize}: The size of the overhang (on one side)
+
+\item \code{getTileNumber}: The total number of tiles
+
+\item \code{is.HDF5}: A boolean function that is true if object uses HDF5 backend
+
+\item \code{design}: Access to the design slot.
+
+\item \code{design<-}: Replace method of the design slot.
+
+\item \code{sizeFactors}: Access to the sizeFactors slot
+
+\item \code{sizeFactors<-}: Replace method of the sizeFactors slot
+
+\item \code{getChunkSize<-}: Replace method of the chunkSize parameter,
+that triggers a new computation of the tiles based on the new chunk size.
+
+\item \code{getTileSize<-}: Replace method of the tileSize parameter,
+that triggers a new computation of the tiles based on the new tile size.
+
+\item \code{getOverhangSize<-}: Replace method of the overhangSize parameter,
+that triggers a new computation of the tiles based on the new overhang size.
+
+\item \code{getTileNumber<-}: Replace method of the tileNumber parameter,
+that triggers a new computation of the tiles based on the new number of tiles.
+}}
+
 \section{Slots}{
 
 \describe{
-\item{\code{settings}}{The global and local settings that were used to compute the model.}
+\item{\code{settings}}{The global and local settings that will be used to compute the
+model.}
 
-\item{\code{design}}{The formula describing how to evaluate the data.}
+\item{\code{design}}{The formula describing how to evaluate the data. See details.}
 
-\item{\code{sizeFactors}}{The normalized values for each sample.}
+\item{\code{sizeFactors}}{The normalized values for each sample. A named numeric vector.}
+
+\item{\code{index}}{A GRanges object representing an index of the ranges defined 
+on the genome. Mostly used to store tiles.}
+
+\item{\code{hdf5}}{A logical slot indicating if the object should be stored as HDF5}
+
+\item{\code{countMatrix}}{Either a matrix or HDF5Matrix to store the sums of counts of
+the regions (could also be seen as bins) for later use especially by DESeq2}
 }}
+
+\section{Config}{
+
+
+The config file/data.frame contains the actual experiment design. It must
+contain at least three columns with fixed names: 'ID', 'file' and 'paired'.
+
+The field 'ID' stores a unique identifier for each alignment file.
+It is recommended to use short and easy to understand identifiers because
+they are subsequently used for labelling data and plots.
+
+The field 'file' stores the BAM file name.
+
+The field 'paired', values TRUE for paired-end sequencing data, and FALSE for
+single-end sequencing data.
+
+All other columns are stored in the colData slot of the GenoGAMDataSet
+object. Note that all columns which will be used for analysis must have at
+most two conditions, which are for now restricted to 0 and 1. For example,
+if the IP data schould be corrected for input, then the input will be 0
+and IP will be 1, since we are interested in the corrected IP. See examples.
+}
+
+\section{Design/Formula}{
+
+
+Design must be a formula. At the moment only the following is
+possible: Either ~ s(x) for a smooth fit over the entire data or
+s(x, by = myColumn), where 'myColumn' is a column name
+in the experimentDesign. Any combination of this is possible:
+
+~ s(x) + s(x, by = myColumn) + s(x, by = ...) + ...
+
+For example the formula for correcting IP for input would look like this:
+
+~ s(x) + s(x, by = experiment)
+
+where 'experiment' is a column with 0s and 1s, with the ip samples annotated
+with 1 and input samples with 0.
+'
+}
+
+\section{Further parameters}{
+
+
+In case of single-end data it might be usefull to specify a different
+method for fragment size estimation. The argument 'shiftMethod' can be
+supplied with the values 'coverage' (default), 'correlation' or 'SISSR'.
+See ?chipseq::estimate.mean.fraglen for explanation.
+}
+
+\examples{
+# Build from config file
+
+config <- system.file("extdata/Set1", "experimentDesign.txt", package = "GenoGAM")
+dir <- system.file("extdata/Set1/bam", package = "GenoGAM")
+
+## For all data
+ggd <- GenoGAMDataSet(config, chunkSize = 1000, overhangSize = 200,
+    design = ~ s(x) + s(x, by = genotype), directory = dir)
+ggd
+
+## Read data of a particular chromosome
+settings <- GenoGAMSettings(chromosomeList = "chrXIV")
+ggd <- GenoGAMDataSet(config, chunkSize = 1000, overhangSize = 200,
+    design = ~ s(x) + s(x, by = genotype), directory = dir,
+    settings = settings)
+ggd
+
+## Read data of particular range
+region <- GenomicRanges::GRanges("chrI", IRanges(10000, 15000))
+params <- Rsamtools::ScanBamParam(which = region)
+settings <- GenoGAMSettings(bamParams = params)
+ggd <- GenoGAMDataSet(config, chunkSize = 1000, overhangSize = 200,
+    design = ~ s(x) + s(x, by = genotype), directory = dir,
+    settings = settings)
+ggd
+
+# Build from data.frame config
+
+df <- read.table(config, header = TRUE, sep = '\\t')
+ggd <- GenoGAMDataSet(df, chunkSize = 1000, overhangSize = 200,
+    design = ~ s(x) + s(x, by = genotype), directory = dir,
+    settings = settings)
+ggd
+
+# Build from SummarizedExperiment
+
+gr <- GenomicRanges::GPos(GRanges("chr1", IRanges(1, 10000)))
+seqlengths(gr) <- 1e6
+df <- S4Vectors::DataFrame(colA = 1:10000, colB = round(runif(10000)))
+se <- SummarizedExperiment::SummarizedExperiment(rowRanges = gr, assays = list(df))
+ggd <- GenoGAMDataSet(se, chunkSize = 2000, overhangSize = 250, 
+                      design = ~ s(x) + s(x, by = experiment))
+ggd
+}
 \author{
 Georg Stricker \email{georg.stricker@in.tum.de}
 }
-

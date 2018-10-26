@@ -4,7 +4,10 @@
 \alias{makeTestGenoGAMDataSet}
 \title{Make an example /code{GenoGAMDataSet}}
 \usage{
-makeTestGenoGAMDataSet()
+makeTestGenoGAMDataSet(sim = FALSE)
+}
+\arguments{
+\item{sim}{Use simulated data (TRUE) or test data from a real experiment}
 }
 \value{
 A /code{GenoGAMDataSet} object
@@ -13,6 +16,6 @@ A /code{GenoGAMDataSet} object
 Make an example /code{GenoGAMDataSet}
 }
 \examples{
-test <- makeTestGenoGAMDataSet()
+realdt <- makeTestGenoGAMDataSet()
+simdt <- makeTestGenoGAMDataSet(sim = TRUE)
 }
-

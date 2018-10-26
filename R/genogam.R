@@ -1,329 +1,656 @@
-## =========================
-##  The main fitting method
-## =========================
-
-#' Function to initialize the Cross Validation
-#'
-#' @param formula A formula object.
-#' @param data A DataFrame object.
-#' @param family A distribution family object.
-#' @param sp The penalization parameters, as many as there are splines.
-#' @param fixedPars The parameters to be fixed.
-#' @param fixedPars A logical vector indicating if a parameter is fixed or not.
-#' @param sf A size factor vector
-#' @return A list with the the parameters and their initial values.
-#' @author Georg Stricker \email{georg.stricker@@in.tum.de}
-.initCV <- function(formula, data, family, sp, fixedPars, experimentDesign, sf) {
-
-    idx <- sample(length(data), 1)
-    initDataset <- .meltGTile(list(data[[idx]]), experimentDesign, sf, formula)
-
-    ## The tryCatch not very elegant, but for now necessary to workaround
-    ## the mgcv routine to estimate a first guess in low count regions.
-    ## Otherwise the while loop in mgcv runs til divison by zero (see function mgcv::initial.sp)
-    init <- tryCatch({
-        mgcv::gam(formula, initDataset[[1]], family = family, sp = sp)
-    }, error = function(e) {
-        c(lambda = 100, theta = 5)
-    })
-    if(class(init)[1] == "numeric") {
-        lambda <- init['lambda']
-        theta <- init['theta']
-    }
-    else {
-        theta <- init$family$getTheta()
-        lambda <- init$full.sp
-    }
-    if(is.null(lambda)) lambda <- mean(init$sp)
-
-    if(fixedPars[1]) {
-        pars <- c(theta = theta)
-        fpars <- list(lambda = lambda, theta = NULL)
-    }
-    if(fixedPars[2]) {
-        pars <- c(lambda = log(lambda))
-        fpars <- list(lambda = NULL, theta = exp(theta))
-    }
-    if(all(!fixedPars)) {
-        pars <- c(lambda = log(lambda), theta = theta)
-        fpars <- list(lambda = NULL, theta = NULL)
-    }
-    return(list(pars = pars, fpars = fpars))
-}
+#################################
+## The main modelling function ##
+#################################
 
 #' genogam
 #'
-#' This is the fitting function for GenoGAMDataSet. It processes the data
-#' in GenoGAMDataSet, estimates the overdispersion and the penalization parameter,
-#' passes all information to mgcv::gam in parallel fashion and extracts
-#' the results. So far the model is restricted to Negativ Binomial distribution (mgcv::nb()).
-#' 
-#' @param ggd A GenoGAMDataSet object to be fitted.
-#' @param lambda The penalization parameter. Will be estimated if missing.
-#' @param family A distribution family object. So far only mgcv::nb() is allowed.
-#' @param bpknots Number of basepairs per one knot, that is,  how dense should the knots
-#' be placed. The denser the knots, the more sensitive the fit. Note however, that computation
-#' time increases approximately cubic with every additional knot.
-#' @param kfolds An integer number giving the number of k-folds to be used in cross
-#' validation, if parameters need to be estimated.
-#' @param intervallSize The size of the intervalls to be used in cross validation.
-#' Short intervalls are used instead of single points to be left out due to
-#' spatial correlation. If replicates are present it is advised to make them bigger,
-#' e.g. 2*fragment size. Otherwise, depending on the density of the data, they should
-#' not exceed the size of a short read.
-#' @param m The penalization order of the P-Splines.
-#' @return A GenoGAM object containing the fits and parameters.
+#' The main modelling function.
+#' @param ggd The GenoGAMDataSet object to be fitted
+#' @param lambda The penalization parameter. If NULL (default) estimated by
+#' cross validation. So far only one parameter for all splines is supported.
+#' @param theta The global overdispersion parameter. If NULL (default) estimated
+#' by cross validation.
+#' @param family The distribution to be used. So far only Negative-Binomial (nb)
+#' is supported.
+#' @param eps The factor for additional first-order regularization. This should be
+#' zero (default) in most cases. It can be useful for sparse data with many
+#' zero-counts regions or very low coverage. In this cases it is advised to use
+#' a small factor like 0.01, which would penalize those regions but not the ones
+#' with higher coverage. See Wood S., Generalized Additive Models (2006) for more.
+#' @param kfolds The number of folds for cross validation
+#' @param intervalSize The size of the hold-out intervals in cross validation.
+#' If replicates are present, this can easily be increased to twice the fragment
+#' size to capture more of the local correlation. If no replicates are present,
+#' keep the number low to avoid heavy interpolation (default).
+#' @param regions How many regions should be used in cross validation? The number
+#' is an upper limit. It is usually corrected down, such that the total number of
+#' models computed during cross validation does not exceed the total number of
+#' models to compute for the entire genome. This is usually the case for small
+#' organisms such as yeast.
+#' @param order The order of the B-spline basis, which is order + 2, where 0
+#' is the lowest order. Thus order = 2 is equivalent to cubic order (= 3).
+#' @param m The order of penalization. Thus m = 2 penalizes the second differences.
+#' @return The fit as a GenoGAM object
 #' @examples
-#' \dontrun{
-#' ## simple example
-#' config <- data.frame(ID = c("input", "IP"),
-#'                      file = c("myInput.bam",
-#'                               "myIP.bam"),,
-#'                     paired = c(FALSE, FALSE),
-#'                     type = c(0,1), stringsAsFactors = FALSE)
-#' bpk <- 100 ## basepairs per one knot
-#' chunkSize <- 5000
-#' overhang <- round(7*chunkSize/bpk) ##overhang with 7 knots
-#' knots <- chunkSize/bpk
-#' ## build the GenoGAMDataSet
-#' gtiles <- GenoGAMDataSet(config = config, chunkSize = chunkSize, overhangSize = overhang,
-#'                          design = ~ s(x) + s(x, by = type))
-#' gtiles <- computeSizeFactors(gtiles)
-#' fits <- genogam(gtiles, bpknots = bpk)
-#' }
+#' ggd <- makeTestGenoGAMDataSet(sim = TRUE)
+#' res <- genogam(ggd, lambda = 266.8368, theta = 2.415738)
 #' @author Georg Stricker \email{georg.stricker@@in.tum.de}
 #' @rdname fitGenoGAM
 #' @export
-genogam <- function(ggd, lambda = NULL, family = mgcv::nb(),
-                    bpknots = 20, kfolds = 10, intervallSize = 20, m = 2) {
+genogam <- function(ggd, lambda = NULL, theta = NULL, family = "nb", eps = 0,
+                    kfolds = 10, intervalSize = 20, regions = 20, order = 2,
+                    m = 2) {
 
-  settings <- slot(ggd, "settings")
-  chunkCoords <- getChunkIndex(ggd)
-  tileIndex <- getIndex(ggd)
-  tileSettings <- tileSettings(ggd)
-  check <- checkSettings(ggd)
-  if(!check) break
+    futile.logger::flog.info("Initializing the model")
+
+    input <- paste0("Initializing the model with the following parameters:\n",
+                    "  Lambda: ", lambda, "\n",
+                    "  Theta: ", theta, "\n",
+                    "  Family: ", family, "\n",
+                    "  Epsilon: ", eps, "\n",
+                    "  Number of folds: ", kfolds, "\n",
+                    "  Interval size: ", intervalSize, "\n",
+                    "  Number of regions: ", regions, "\n",
+                    "  B-spline order: ", order, "\n",
+                    "  Penalization order: ", m, "\n",
+                    "  GenoGAMDataSet object: ")
+    futile.logger::flog.debug(input)
+    futile.logger::flog.debug(show(ggd))
+    futile.logger::flog.debug(show(slot(ggd, "settings")))
     
-  knots <- round(tileSettings$tileSize/bpknots)
-  if(knots > 100) {
-    warning("Number of knots is above the recommended maximum of 100. Computation time will be high. Decrease tile size for faster computation.")
-  }
+    settings <- slot(ggd, "settings")
+    check <- .checkSettings(ggd)
+    coords <- .getCoordinates(ggd)
+    chunks <- .getChunkCoords(coords)
 
-  if(family$n.theta == 0) theta <- family$getTheta(trans = TRUE)
-  else theta <- NULL
-  FIXLAMBDA <- ifelse(is.null(lambda), FALSE, TRUE)
-  FIXTHETA <- ifelse(is.null(theta), FALSE, TRUE)
-  cv <- FALSE
-    
-  formula <- design(ggd)
-  formula <- .updateFormula(formula, knots, m)
-  
-  ## How many splines?
-  vars <- .getVars(formula)[-1]
-  nsplines <- length(vars)
-
-  ## convert data
-  futile.logger::flog.info("Process data")
-  data <- getTile(ggd)
-  vec <- Rle(rep(tileIndex$id, width(tileIndex)))
-  data@unlistData$id <- vec
-
-  ncv <- min(20, length(data))
-
-  if(is.null(lambda) | is.null(theta)) {
-    futile.logger::flog.info("Estimating parameters")
-
-    ## get the tile ids for CV
-    sumMatrix <- sum(ggd)
-    if(ncv >= 20) {
-      pvals <- suppressMessages(suppressWarnings(.deseq(sumMatrix[[1]], names(sizeFactors(ggd)))))
-      ids <- order(pvals)[1:ncv]
-    }
-    else ids <- 1:length(data)
-    
-    ## initialize parameters for CV
-    sp <- rep(lambda, nsplines)
-    init <- .initCV(formula, data[ids], family, sp, c(FIXLAMBDA, FIXTHETA), colData(ggd), sizeFactors(ggd))
-    ## if(!FIXLAMBDA) {
-    ##   init$pars['lambda'] <- min(init$pars['lambda'], log(knots))
-    ## }
-
-    ## perform CV
-    params <- .doCrossValidation(init$pars, .loglik, data[ids], formula = formula,
-                                 folds = kfolds, intervallSize = intervallSize,
-                                 fixedpars = init$fpars,
-                                 experimentDesign = colData(ggd), sf = sizeFactors(ggd),
-                                 method = getDefaults(settings, "optimMethod"),
-                                 control = getDefaults(settings, "optimControl"))
-    names(params) <- c("lambda", "theta")
-    lambda <- params[1]
-    theta <- params[2]
-
-    cv <- TRUE
     futile.logger::flog.info("Done")
-  }
-  if(!FIXTHETA) family <- mgcv::nb(theta = theta)
-  cdata <- colData(ggd)
-  sf <- sizeFactors(ggd)
-  lambda_vec<- rep(lambda, nsplines)
+    ## Cross Validation
+    cv <- FALSE
+    regionSize <- slot(settings, "dataControl")$regionSize
+    bpknots <- slot(settings, "dataControl")$bpknots
 
-  futile.logger::flog.info("Fitting model")
+    ggs <- setupGenoGAM(ggd, lambda = lambda, theta = theta, family = family, 
+                        eps = eps, bpknots = bpknots, order = order,
+                        penorder = m, control = slot(settings, "estimControl"))
+    
+    if(is.null(lambda) | is.null(theta)) {
+        futile.logger::flog.info("Estimating hyperparameters")
 
-  
-  lambdaFun <- function(data, colData, sf, formula, family, lambdas, 
-                        chunkIndex) {
-    suppressPackageStartupMessages(require(GenoGAM, quietly = TRUE))
-    id <- runValue(data$id)
-    df <- .meltGTile(list(data), colData, sf, formula)
-    mod <- mgcv::gam(formula, df[[1]], family = family, sp = lambdas)
-    fits <- getFunctions(mod, df[[1]])
-    rowindx <- match(c(start(chunkIndex[id]), end(chunkIndex[id])), data$pos)
-    fits <- fits[seq(from = rowindx[1], to = rowindx[2]),]
-    smooths <- extractSplines(mod)
-    attr(smooths, "id") <- id
-    vcov <- mgcv::vcov.gam(mod)
-    upperTri_vcov <- upper.tri(vcov, diag = TRUE)
-    vcov <- vcov[upperTri_vcov]
-    attr(vcov, "smooths") <- na.omit(smooths)$smooth
-    return(list(fits = fits, smooths = smooths, vcov = vcov))
-  }
+        ## check correct region size
+        if(regionSize < 2*getOverhangSize(ggd)) {
+            futile.logger::flog.warn("region size too small for cross validation, set to twice the overhang size.")
+            regionSize <- 2*getOverhangSize(ggd)
+        }
 
-  res <- bplapply(data, lambdaFun, colData = cdata, sf = sf, formula = formula,
-                  family = family, lambdas = lambda_vec, chunkIndex = chunkCoords)
+        ## backup original tile index
+        index_backup <- getIndex(ggd)
 
-  smooths <- list(chunkIndex = chunkCoords,
-                  splines = list())
-  smooths$splines <- lapply(res, function(y) y$smooths)
-  names(smooths$splines) <- chunkCoords$id
-  vcov <- lapply(res, function(y) y$vcov)
-  names(vcov) <- chunkCoords$id
-  fits <- lapply(res, function(y) y$fits)
+        ## make new tile index
+        metadata(slot(ggd, "index"))$chunkSize <- regionSize
+        newTiles <- .makeTiles(tileSettings(ggd))
+        slot(ggd, "index") <- newTiles
+        new_ggs <- setupGenoGAM(ggd, lambda = lambda, theta = theta, family = family, 
+                                eps = eps, bpknots = bpknots, order = order,
+                                penorder = m, control = slot(settings, "estimControl"))
+        new_coords <- .getCoordinates(ggd)
+        
+        ## get the tile ids for CV
+        sumMatrix <- getCountMatrix(ggd)
+        
+        ncv <- regions
+        
+        if(ncv < length(new_coords)) {
+            if(sum(sapply(colData(ggd), sum)) == nrow(colData(ggd)) |
+               nrow(sumMatrix) < regions) {
+                if(is(sumMatrix, "DelayedMatrix")) {
+                    rsums <- DelayedArray::rowSums(sumMatrix)
+                }
+                else {
+                    rsums <- rowSums(sumMatrix)
+                }
+                ids <- order(rsums, decreasing = TRUE)[1:ncv]
+            }
+            else {
+                futile.logger::flog.debug("Performing DESeq2 analysis to find regions with highest fold change")
+                pvals <- suppressMessages(suppressWarnings(.deseq(sumMatrix, colData(ggd))))
+                ids <- order(pvals)[1:ncv]
+            }
+        }
+        else ids <- 1:length(new_coords)
 
-  ##combine
-  fits <- data.table::rbindlist(fits)
+        control <- slot(settings, "optimControl")
+        futile.logger::flog.debug(paste("Selected the following regions:", paste(ids, collapse = ",")))
+        
+        params <- .doCrossValidation(ggd, setup = new_ggs, coords = new_coords, 
+                                     id = ids, folds = kfolds, 
+                                     intervalSize = intervalSize,
+                                     fn = .loglik, 
+                                     method = slot(settings, "optimMethod"),
+                                     control = control) 
 
-  ## create GenoGAM object
-  fitparams <- c(lambda = unname(lambda), theta = unname(family$getTheta(trans = TRUE)),
-                 CoV = sqrt(1/unname(family$getTheta(trans = TRUE))), penorder = m)
-  cvparams <- c(kfolds = kfolds, ncv = ncv, size = intervallSize, cv = cv)
-  tempFormula <- gsub("pos", "x", formula)
-  saveFormula <- as.formula(paste(tempFormula[2], tempFormula[1], tempFormula[3]))
-  genogamObject <- .GenoGAM(design = saveFormula, fits = fits,
-                            positions = rowRanges(ggd), smooths = smooths, vcov = vcov,
-                            experimentDesign = as.matrix(colData(ggd)[,na.omit(vars), drop = FALSE]),
-                            fitparams = fitparams, family = family,
-                            cvparams = cvparams, settings = settings,
-                            tileSettings = tileSettings)
+        names(params) <- c("lambda", "theta")
+        slot(ggs, "params")$lambda <- params["lambda"]
+        slot(ggs, "params")$theta <- params["theta"]
 
-  futile.logger::flog.info("DONE")
-  return(genogamObject)
-}
+        ## set back the original tile index and delete other objects
+        slot(ggd, "index") <- index_backup
+        rm("new_ggs", "new_coords")
+        gc()
+        
+        cv <- TRUE
+        futile.logger::flog.info("Done")
+    }
 
-#' Get all the splines and derivatives
-#'
-#' @param mod The mgcv model.
-#' @param data The mgcv input data.
-#' @param experimentMatrix A matrix object representing the experiment design.
-#' @param m The penalization order of the P-splines.
-#' @return A data.table of all the splines and derivatives.
-#' @author Georg Stricker \email{georg.stricker@@in.tum.de}
-#' @noRd
-getFunctions <- function(mod, data) {
-    ## some constants
-    samplenames <- unique(data$ID)
-    vars <- .getVars(mod$formula)[-1]
-    num_var <- length(mod$smooth)
-    len <- length(unique(data$pos))
+    ## specify ids
+    ids <- 1:length(coords)
+    ## make chunk coordinates relative
+    s <- start(chunks) %% start(coords) + 1
+    e <- s + width(chunks) - 1
+    relativeChunks <- IRanges::IRanges(s, e)
 
-    ## get data
-    pred <- mgcv::predict.gam(mod, type = "iterms", se.fit = TRUE)
+    ## prepare some slots
+    modelParams <- slot(ggs, "params")
+    modelParams$cv <- cv
+    modelParams$bpknots <- bpknots
+    modelParams$order <- order
+    modelParams$penorder <- m
+    if(cv) {
+        modelParams$kfolds <- kfolds
+        modelParams$intervalSize <- intervalSize
+        modelParams$regions <- ncv
+    }
+    modelParams <- c(modelParams, tileSettings(ggd))
+    modelParams$check <- NULL
 
-    ## result data.table
-    res <- data.table::data.table(matrix(0, len, num_var*2))
-    nameslist <- c(colnames(pred$fit), paste("se", colnames(pred$se.fit), sep = "."))
-    data.table::setnames(res, names(res), nameslist)    
+    futile.logger::flog.info("Fitting model")
+    
+    ## ================
+    ## start model
+    ## ================
 
-    ## insert prediction values
-    for(ii in 1:num_var) {
-        if(ii == 1) intercept <- coefficients(mod)[1]
-        else intercept <- 0
-        label <- mod$smooth[[ii]]$label
-        selabel <- paste("se", label, sep = ".")
-        if(is.na(vars[ii])) {
-            uniquepos <- !duplicated(data[, "pos"])
-            res[[label]] <- pred$fit[uniquepos, label] + intercept
-            res[[selabel]] <- pred$se.fit[uniquepos, label]
+    ## For a dataset split by chromosomes
+    ## ----------------------------------
+    
+    if(is(ggd, "GenoGAMDataSetList")) {
+        identifier <- slot(ggd, "id")$id
+        indx <- getIndex(ggd)
+
+        ## And with HDF5 backend
+        ## ---------------------
+        if(slot(ggd, "hdf5")) {
+            ## create HDF5 file for coefficients
+            ## the dimension of the matrix for coefsfile (betas * tile width)
+            nfun <- length(.getVars(design(ggd), type = "covar"))
+            nbetas <- dim(slot(ggs, "designMatrix"))[2]
+            d <- c(nbetas * nfun, length(getIndex(ggd)))
+
+            ## create Coefs file
+            seedFile <- .get_seed(assay(ggd)[[1]])
+            chunk <- c(nbetas * nfun, 1)
+            coefsFile <- .createH5DF(seedFile, settings, d, chunk, what = "coefs")
+        }
+
+        ## lapply by identifier, i.e. chromosome
+        selist <- lapply(identifier, function(y) {
+            ## get correct ids
+            subids  <- ids[as.vector(GenomeInfoDb::seqnames(indx) %in% y)]
+            rr <- rowRanges(ggd)[[y]]
+            
+            ## compute model for one identifier, i.e chromosome
+            futile.logger::flog.info(paste("Fitting", y))
+
+            ## And with HDF5 backend
+            ## ---------------------
+            
+            if(slot(ggd, "hdf5")) {               
+                ## the dimension of the matrix for given chromosome
+                d <- c(length(rr), nfun)
+                ## create datasets
+                seedFile <- .get_seed(assay(ggd)[[y]])
+                h5file <- .createH5DF(seedFile, settings, d, chunk = c(getChunkSize(ggd), nfun))
+
+                ## create chunks coordinates for given chromosome
+                chromIndex <- getIndex(ggd)[seqnames(getIndex(ggd)) == y,]
+                seqlevels(chromIndex, pruning.mode = "coarse") <- seqlevelsInUse(chromIndex)
+                chunks <- .getChunkCoords(chromIndex)
+            }
+
+            ## No HDF5 backend
+            ## ---------------------
+            
+            else {
+                h5file <- NULL
+                coefsFile <- NULL
+            }
+
+            ## initialize queue and start fitting in parallel
+            qdir <- .init_Queue(h5file)
+            res <- BiocParallel::bplapply(subids, .fitGenoGAM, 
+                                          data = ggd, init = ggs, coords = coords,
+                                          relativeChunks = relativeChunks, h5file = h5file,
+                                          chunks = chunks, coefsFile = coefsFile,
+                                          qdir = qdir)
+            ## remove temporary queue folder and close files
+            .end_Queue(qdir)
+            
+            futile.logger::flog.info(paste(y, "Done"))
+      
+            ## assemble results
+            futile.logger::flog.info("Processing Fits")
+
+            ## With HDF5 backend
+            ## ---------------------
+            
+            if(slot(ggd, "hdf5")) {
+
+                ## make names, as HDF5 does not store them
+                colDataNames <- .makeNames(design(ggd))
+                df <- DataFrame(matrix(,length(colDataNames),0))
+                rownames(df) <- colDataNames
+
+                ## TODO: In Hdf5 write function need to attach log entry to HDF5 dumpLog
+                h5fits <- HDF5Array::HDF5Array(h5file, name = "fits")
+                h5ses <- HDF5Array::HDF5Array(h5file, name = "ses")
+                se <- SummarizedExperiment::SummarizedExperiment(rowRanges = rr,
+                                                                 assays = list(fits = h5fits,
+                                                                               se = h5ses))
+                colData(se) <- df
+                return(se)
+            }
+
+            ## No HDF5 backend
+            ## ---------------------
+            
+            else {
+                combinedFits <- .transformResults(res, relativeChunks, what = "fits")
+                combinedSEs <- .transformResults(res, relativeChunks, what = "se")
+                se <- SummarizedExperiment::SummarizedExperiment(rowRanges = rr,
+                                                                 assays = list(fits = combinedFits,
+                                                                               se = combinedSEs))
+                ## extract coefficients from fits
+                coefs <- sapply(res, function(y) {
+                    slot(y, "beta")
+                })
+                return(list(se = se, coefs = coefs))
+            }
+        })
+
+        if(slot(ggd, "hdf5")) {
+            names(selist) <- names(assay(ggd))
+            coefs <- HDF5Array::HDF5Array(coefsFile, name = "coefs")
         }
         else {
-            uniquepos <- !duplicated(data[as.logical(data[[vars[ii]]]), "pos"])
-            res[[label]] <- pred$fit[as.logical(data[[vars[ii]]]),][uniquepos, label] + intercept
-            res[[selabel]] <- pred$se.fit[as.logical(data[[vars[ii]]]),][uniquepos, label]
+            ## process spline information
+            coefs <- do.call("cbind", lapply(selist, function(y) y$coefs))
+
+            ## process SummarizedExperiments
+            selist <- lapply(selist, function(y) y$se)
+            names(selist) <- names(assay(ggd))
         }
+        
+        knots <- slot(ggs, "knots")[[1]]
+        futile.logger::flog.info("Processing done")
+
+        gg <- GenoGAMList(data = selist, id = ggd@id,
+                          family = slot(ggs, "family"),
+                          design = design(ggd),
+                          sizeFactors = sizeFactors(ggd),
+                          factorialDesign = colData(ggd),
+                          params = modelParams,
+                          settings = settings,
+                          coefs = coefs,
+                          knots = knots,
+                          hdf5 = slot(ggd, "hdf5"))
     }
-    newColNames <- gsub("pos", "x", names(res))
-    data.table::setnames(res, names(res), newColNames)
-    return(res)
+
+    ## Dataset not split
+    ## -----------------
+    
+    else {
+
+        ## With HDF5 backend
+        ## -----------------
+        
+        if(slot(ggd, "hdf5")) {
+            ## create HDF5 file for coefficients
+            ## the dimension of the matrix for coefsfile (betas * tile width)
+            nfun <- length(.getVars(design(ggd), type = "covar"))
+            nbetas <- dim(slot(ggs, "designMatrix"))[2]
+            d <- c(nbetas * nfun, length(getIndex(ggd)))
+
+            ## create Coefs file
+            seedFile <- .get_seed(assay(ggd))
+            chunk <- c(nbetas * nfun, 1)
+            coefsFile <- .createH5DF(seedFile, settings, d, chunk, what = "coefs")
+
+            rr <- rowRanges(ggd)
+                              
+            ## the dimension of the matrix for given chromosome
+            d <- c(length(rr), nfun)
+            ## create datasets
+            h5file <- .createH5DF(seedFile, settings, d, chunk = c(getChunkSize(ggd), nfun))
+        }
+
+        ## no HDF5 backend
+        ## -----------------
+        
+        else {
+            h5file <- NULL
+            coefsFile <- NULL
+        }
+
+        qdir <- .init_Queue(h5file)
+        res <- BiocParallel::bplapply(ids, .fitGenoGAM, 
+                                      data = ggd, init = ggs, coords = coords,
+                                      relativeChunks = relativeChunks, h5file = h5file,
+                                      chunks = chunks, coefsFile = coefsFile,
+                                      qdir = qdir)
+        ## remove temporary queue folder and close files
+        .end_Queue(qdir)
+        
+        futile.logger::flog.info("Done")
+
+        ## With HDF5 backend
+        ## -----------------
+        
+        if(slot(ggd, "hdf5")) {
+            ## TODO: In Hdf5 write function need to attach log entry to HDF5 dumpLog
+            h5fits <- HDF5Array::HDF5Array(h5file, name = "fits")
+            h5ses <- HDF5Array::HDF5Array(h5file, name = "ses")
+
+            ## make names, as HDF5 does not store them
+            colDataNames <- .makeNames(design(ggd))
+            df <- DataFrame(matrix(,length(colDataNames),0))
+            rownames(df) <- colDataNames
+            
+            se <- SummarizedExperiment::SummarizedExperiment(rowRanges = rr,
+                                                             assays = list(fits = h5fits,
+                                                                           se = h5ses))
+            colData(se) <- df
+            coefs <- HDF5Array::HDF5Array(coefsFile, name = "coefs")
+        }
+
+        ## No HDF5 backend
+        ## -----------------
+
+        else {
+            futile.logger::flog.info("Processing fits")
+            ## build GenoGAM object
+            combinedFits <- .transformResults(res, relativeChunks, what = "fits")
+            combinedSEs <- .transformResults(res, relativeChunks, what = "se")
+
+            se <- SummarizedExperiment::SummarizedExperiment(rowRanges = SummarizedExperiment::rowRanges(ggd),
+                                                             assays = list(fits = combinedFits,
+                                                                           se = combinedSEs))
+            ## process spline information
+            coefs <- sapply(res, function(y) {
+                slot(y, "beta")
+            })
+        }
+
+        knots <- slot(ggs, "knots")[[1]]
+        futile.logger::flog.info("Processing done")
+        
+        gg <- GenoGAM(se, family = slot(ggs, "family"),
+                      design = design(ggd),
+                      sizeFactors = sizeFactors(ggd),
+                      factorialDesign = colData(ggd),
+                      params = modelParams,
+                      settings = settings,
+                      coefs = coefs,
+                      knots = knots,
+                      hdf5 = slot(ggd, "hdf5"))
+    }
+
+    futile.logger::flog.info("Finished")
+    return(gg)
 }
 
-#' The B-Spline function.
-#'
-#' A function to construct B-Spline bases.
-#'
-#' @param x The numeric vector of x values at which to evaluate the function
-#' @param k A vector of knot positions
-#' @param m The B-Spline basis order as order - 1, e.g. m = 2 is cubic
-#' @param derivative The order of derivative
-#' @return A matrix with dimensions length(x) * length(k)
-#' @author Georg Stricker \email{georg.stricker@@in.tum.de}
-#' @noRd
-bspline <- function(x, k, m = 2, derivative = 0) {
-    res <- splines::spline.des(k, x, m + 2, rep(derivative,length(x)))$design
-    return(res)
-}    
+.fitGenoGAM <- function(id, data, init, coords, relativeChunks = NULL, chunks = NULL, h5file = NULL,
+                       coefsFile = NULL, qdir = NULL) {
+    suppressPackageStartupMessages(require(GenoGAM, quietly = TRUE))
 
-#' Extract splines from model.
-#'
-#' A function to extract splines parameters from the gam model.
-#'
-#' @param mod A gam model object
-#' @return A data.table of spline parameters
-#' @author Georg Stricker \email{georg.stricker@@in.tum.de}
-#' @noRd
-extractSplines <- function(mod){
+    setup <- .initiate(data, init, coords, id)
+    betas <- .estimateParams(setup)
 
-    num_var <- length(mod$smooth)
-    res <- NULL
-    all_coef <- coefficients(mod)
-    for (jj in 1:num_var) {
-        smooth <- mod$smooth[[jj]]
-        smoothType <- attr(smooth, "class")
-
-        if(smoothType[1] == "pspline.smooth") {
-            kn <- smooth$knots
-            first <- smooth$first.para
-            last <- smooth$last.para
-            nConstraints <- attr(smooth, "nCons")
-            coefs <- all_coef[first:last]
-            name <- smooth$label
-            name <- gsub("pos", "x", name)
-        }
-
-        if (nConstraints > 0) {
-            qrc <- attr(smooth, "qrc")
-            qrDim <- dim(qrc$qr)
-            insertedZeros <- rep(0, nConstraints)
-            y <- matrix(c(insertedZeros, coefs), qrDim)
-            coefs <- qr.qy(qrc,y)
-        }
-
-        if(is.null(start)) start <- min(kn)
-        if(is.null(end)) end <- max(kn)
-
-        nas <- length(kn) - length(coefs)
-        coefs <- c(coefs,rep(NA,nas))
-        res <- rbind(res, data.frame(knots = kn, coefs = coefs, smooth = name))
-
+    futile.logger::flog.debug(paste("Beta estimation for tile", id, "took", betas$iterations, "iterations"))
+    if(betas$converged == FALSE) {
+        futile.logger::flog.warn("Beta estimation did not converge. Increasing the 'maxiter' or 'eps' parameter in 'estimControl' slot in the settings might help, but should be done at own risk.")
     }
-    attr(res, "intercept") <- all_coef["(Intercept)"]
+    
+    slot(setup, "beta") <- betas$par
+    slot(setup, "fits") <- .getFits(setup)
+    
+    slot(setup, "se") <- .compute_SE(setup)
+    slot(setup, "params")$id <- id
+    
+    ## procedure to gradually write results to HDF5, to safe memory footprint
+    if(slot(data, "hdf5")) {
+        if(any(is.null(chunks), is.null(h5file))) {
+            ## An error rather for the developer
+            stop("Chunk coordinates missing in the fitting function")
+        }
+
+        ## extract fits and SEs
+        combinedFits <- .transformResults(list(setup), relativeChunks, what = "fits")
+        combinedSEs <- .transformResults(list(setup), relativeChunks, what = "se")
+
+        if(is(data, "GenoGAMDataSetList")) {
+            ## normalize ID chromosome-wise, as it is usually based on the entire genome
+            chrom <- as.character(GenomeInfoDb::seqnames(getIndex(data)[id,]))
+            subindx <- getIndex(data)[GenomeInfoDb::seqnames(getIndex(data)) == chrom,]
+            normID <- which(subindx == getIndex(data)[id,])
+        }
+        else {
+            normID <- id
+        }
+
+        ## queue write process
+        qid <- .queue(qdir)
+        ## wait till it's your turn
+        
+        while(list.files(qdir)[1] != qid){
+            Sys.sleep(0.1)
+        }
+
+        ## write data
+        ## Fits
+        rhdf5::h5write(as.matrix(combinedFits), file = h5file, name = "/fits",
+                       index = list(start(chunks)[normID]:end(chunks)[normID], 1:ncol(combinedFits)))
+        rhdf5::h5write(as.matrix(combinedSEs), file = h5file, name = "/ses",
+                       index = list(start(chunks)[normID]:end(chunks)[normID], 1:ncol(combinedFits)))
+        ## Coefs
+        rhdf5::h5write(betas$par, file = coefsFile, name = "coefs",
+                       index = list(1:length(betas$par), id))
+
+        ## Unqueue file by removing
+        .unqueue(qid, qdir)
+        
+        ## reset not needed slots
+        slot(setup, "designMatrix") <- new("dgCMatrix")
+        slot(setup, "penaltyMatrix") <- new("dgCMatrix")
+        slot(setup, "response") <- numeric()
+        slot(setup, "offset") <- numeric()
+        
+        return(NULL)
+    }
+
+    return(setup)
+}
+
+##########################
+
+## Builds the response vector from GenoGAMDataSet and the given row coordinates
+.buildResponseVector <- function(ggd, coords, id) {
+    
+    if(length(ggd) == 0 | length(coords) == 0) {
+        return(numeric())
+    }
+    
+    tile <- coords[id,]
+    y <- .subsetByCoords(x = assay(ggd), i = start(tile):end(tile))
+    
+    Y <- unname(unlist(as.data.frame(y)))
+    return(as.integer(Y))
+}
+
+## initiates GenoGAMSetup with tile specific data
+.initiate <- function(ggd, setup, coords, id) {
+
+    ## build X from X0 and design
+    des <- .getDesignFromFormula(design(ggd), colData(ggd))
+    X <- as(.blockMatrixFromDesignMatrix(slot(setup, "designMatrix"), des), "dgCMatrix")
+    slot(setup, "designMatrix") <- X
+
+    ## build S from S0 and design
+    Sdes <- diag(ncol(des))
+    S <- as(.blockMatrixFromDesignMatrix(slot(setup, "penaltyMatrix"), Sdes), "dgCMatrix")
+    slot(setup, "penaltyMatrix") <- S
+
+    ## initiate response vector and betas
+    slot(setup, "response") <- .buildResponseVector(ggd, coords, id)
+    numBetas <- dim(slot(setup, "designMatrix"))[2]
+    
+    if(length(slot(setup, "response")) != 0) {
+        ## setup betas as all 1 in normal space = 0s in log space
+        betas <- rep(1, numBetas)
+        ## set betas to the runmedian of the response
+        ## means <- IRanges::runmed(slot(setup, "response"), 11, endrule = "median")
+        ## ## take 250 values at equidistant positions
+        ## ks <- as.integer(seq(1, length(means), length.out = numBetas))
+        ## ## set all zero values to 1, because of log
+        ## betas <- means[ks]
+        ## betas[which(betas == 0)] <- 1
+        slot(setup, "beta") <- matrix(log(betas), numBetas, 1)
+    }
+        
+    ## initialize lambda and theta
+    params <- slot(setup, "params")
+    if(is.null(params$lambda)) {
+        params$lambda <- numBetas
+    }
+    if(is.null(params$theta)) {
+        params$theta <- 1
+    }
+    slot(setup, "params") <- params
+
+    return(setup)
+}
+
+## compute fits from design matrix and estimated betas
+.getFits <- function(setup, log = TRUE) {
+    if(all(dim(slot(setup, "designMatrix")) == c(0, 0)) |
+       all(is.na(slot(setup, "beta")))) {
+        return(list())
+    }
+
+    ## get design matrix and beta vector
+    X <- slot(setup, "designMatrix")
+    betas <- slot(setup, "beta")
+
+    ## get row and column indeces of the design matrix
+    ## for the respective fits
+    des <- slot(setup, "design")
+    nSplines <- ncol(des)
+    nSamples <- nrow(des)
+    dims <- dim(X)
+    rows <- list(1:dims[1])
+    cols <- list(1:dims[2])
+
+    if(nSplines > 1) {
+        cols <- split(1:dims[2], cut(1:dims[2], nSplines, labels = 1:nSplines))
+    }
+    if(nSamples > 1) {
+        rows <- split(1:dims[1], cut(1:dims[1], nSamples, labels = 1:nSamples))
+    }
+
+    ## compute the fits by column (splines) and row (samples)
+    ## of the design matrix. All fits of the same spline
+    ## are combined to a vector to have the same structure as
+    ## the response. Each spline is one element of the list, that
+    ## gets returned as the result.
+    fits <- lapply(1:nSplines, function(j) {
+        res <- sapply(1:nSamples, function(i) {
+            Xsub <- X[rows[[i]], cols[[j]]]
+            beta <- betas[cols[[j]], 1]
+            fit <- as.vector(Xsub %*% beta)
+            if(!log) {
+                fit <- exp(fit)
+            }
+            return(fit)
+        })
+        res <- as.vector(res)
+        return(res)
+    })
+    varNames <- .makeNames(slot(setup, "formula"))
+    names(fits) <- varNames
+
+    return(fits)
+}
+
+## transform the result list of GenoGAMSetup object into a DataFrame
+## of either fits or standard errors
+.transformResults <- function(x, relativeChunks, id = NULL, what = c("fits", "se")) {
+    if(length(relativeChunks) == 0) {
+        return(data.table::data.table())
+    }
+    aslist <- TRUE
+
+    if(is.null(id)) {
+        id <- data.table::data.table(index = 1:length(x), listid = 1)
+        aslist <- FALSE
+        identifiers <- unique(id$listid)
+    }
+
+    if(aslist) {
+        identifiers <- unique(id$listid)
+        res <- vector("list", length(identifiers))
+    }
+        
+    for(ii in identifiers) {
+        elements <- id[id$listid == ii,]$index
+        
+        allData <- lapply(x[elements], function(y) {
+            if(length(slot(y, what)) == 0) {
+                return(data.table::data.table())
+            }
+            
+            s <- start(relativeChunks[slot(y, "params")$id])
+            e <- end(relativeChunks[slot(y, "params")$id])
+
+            ## go by column and subset by colData column
+            l <- lapply(1:length(slot(y, what)), function(z) {
+                
+                des <- slot(y, "design")
+                fits <- slot(y, "fits")
+                if(length(des) == 0 | length(fits) == 0) {
+                    res <- list()
+                }
+                else {
+                    tileLength <- length(fits[[z]])/nrow(des)
+                    ## expand colData columns to full length and coerce to boolean
+                    desVec <- matrix(as.logical(rep(des, each = tileLength)), ncol = ncol(des))
+                    ## take the z list element (= column) and
+                    ## subset by the z colData column
+                    res <- slot(y, what)[[z]][desVec[,z]]
+                    res <- res[s:e]
+                }
+                return(res)
+            })
+            names(l) <- names(slot(y, what))
+            return(data.table::as.data.table(l))
+        })
+        combinedData <- data.table::rbindlist(allData)
+        varNames <- colnames(combinedData)
+        combinedData <- S4Vectors::DataFrame(combinedData)
+        colnames(combinedData) <- varNames
+        if(aslist) {
+            res[[ii]] <- combinedData
+        }
+        else {
+            res <- combinedData
+        }
+    }
+
     return(res)
 }

@@ -1,0 +1,178 @@
+---
+title: "Modeling ChIP-Seq data with GenoGAM2: A Genome-wide generalized additive model"
+shorttitle: "GenoGAM"
+author: 
+- name: Georg Stricker
+  affiliation: &id Technical University Munich
+  email: georg.stricker@gmx.net
+- name: Julien Gagneur
+  affiliation: *id
+  email: gagneur@in.tum.de
+date: "`r format(Sys.Date(), '%m/%d/%Y')`"
+package: GenoGAM
+abstract: >
+  Many genomic assays lead to noisy observations of a biological quantity of 
+  interest varying along the genome. This is the case for ChIP-Seq, for which
+  read counts reflect local protein occupancy of the ChIP-ed protein. 
+  The GenoGAM package allows statistical analysis of genome-wide data with 
+  smooth functions using generalized additive models. This vignette explains
+  the use of the package for typical ChIP-Seq analysis workflow.
+output: 
+  BiocStyle::html_document:
+    toc_float: true
+bibliography: bibliog.bib
+vignette: >
+  %\VignetteIndexEntry{"Modeling ChIP-Seq data with GenoGAM2: A Genome-wide generalized additive model"}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+ 
+
+```{r setup, echo=FALSE, results="hide"}
+knitr::opts_chunk$set(tidy=FALSE, cache=TRUE,
+                      dev="png", 
+                      message=FALSE, error=FALSE, warning=FALSE)
+```
+
+**Note:** if you use GenoGAM in published research, please cite:
+
+> Stricker and Engelhardt, et al. (2017)
+> GenoGAM: Genome-wide generalized additive models for ChIP-seq analysis
+> *Bioinformatics*, **33**:15.
+> [10.1093/bioinformatics/btx150](https://doi.org/10.1093/bioinformatics/btx150)
+
+# Quick guide (with HDF5)
+
+This is the brief version of the usual workflow of GenoGAM. It involves:
+
+- Reading in data through `GenoGAMDataSet()` to get a `GenoGAMDataSet` object. This is done with the HDF5 backend.
+  
+- Computing size factors with `computeSizeFactors()`
+  
+- Compute the model with `genogam()` to get the result `GenoGAM` object
+
+- compute position-wise log p-values with `computeSignificance()`
+
+## Getting started
+
+The example dataset is restricted to the first 100kb of the first yeast chromosome.
+
+1. We set some required meta variables
+
+```{r}
+library(GenoGAM)
+
+## A.
+## specify folder and experiment design path
+wd <- system.file("extdata/Set1", package='GenoGAM')
+folder <- file.path(wd, "bam")
+expDesign <- file.path(wd, "experimentDesign.txt")
+
+## B. 
+## set HDF5 folder where the data will be stored
+## Note, don't usually use /tmp because all your data and
+## results get deleted otherwise later
+hdf5_folder <- tempdir()
+settings <- GenoGAMSettings(hdf5Control = list(dir = hdf5_folder))
+
+## C.
+## register parallel backend (default is "the number of cores" - 2)
+## Here we also use the SnowParam backend which is advised for larger data
+## For yeast MulticoreParam should also do fine
+BiocParallel::register(BiocParallel::SnowParam(worker = 2))
+
+## D.
+## specify chunk and overhang size. It is possible to skip this,
+## but the automatic specification would prevent us from using
+## multiple tiles in such a small example.
+chunkSize <- 50000
+overhangSize <- 1000
+
+## E.
+## the experiment design reflecting the underlying GAM
+## x = position
+design <- ~ s(x) + s(x, by = genotype)
+```
+
+2. Read in the data to obtain a `Robject{"GenoGAMDataSet"}` object.
+Warnings about out-of-bound ranges can be ignored, as they occur during the 
+shifting process when the genome gets tiled. It is trimmed accordingly.
+I have not yet figured out how to silent those warnings. 
+The usual `suppressWarnings` does not seem to work in the parallel Snow environment.
+
+```{r}
+## build the GenoGAMDataSet with HDF5 backend
+ggd <- GenoGAMDataSet(
+  expDesign, directory = folder,
+  chunkSize = chunkSize, overhangSize = overhangSize,
+  design = design,
+  settings = settings, hdf5 = TRUE
+)
+
+ggd
+```
+
+3. Compute Size factors
+
+```{r}
+## compute size factors
+ggd <- computeSizeFactors(ggd)
+
+ggd
+
+## the data
+assay(ggd)
+```
+
+## Fitting the model
+
+1. Compute model with fixed hyperparameters
+
+```{r}
+## compute model without parameter estimation to save time in vignette
+result <- genogam(ggd, lambda = 4601, theta = 4.51)
+
+result
+
+## the fit and standard error
+fits(result)
+se(result)
+```
+
+2. Compute log p-values
+```{r}
+computeSignificance(result)
+
+pvalue(result)
+```
+
+Plot results of the center 10kb, where both tiles are joined together.
+```{r}
+ranges = GRanges("chrI", IRanges(45000, 55000))
+plotGenoGAM(result, ranges = ranges)
+```
+
+# FAQ
+
+## Armadillo Error
+
+**Problem:** An error occurs during model fitting along those lines:
+
+`error: matrix multiplication: incompatible matrix dimensions: 22333830147200x5360120267008000 and 4294972496x1`
+
+**Solution:** First, make sure you have all Armadillo dependencies installed correctly. See [here](http://arma.sourceforge.net/download.html)
+
+Second, the error is most likely related to the fact, that Armadillo is using 32bit matrices, thus causing problems for large matrices GenoGAM is using. The solution is to enable `ARMA_64BIT_WORD`, which is not enabled in RcppArmadillo by default. This should have been done during compilation, but if it fails for some reason you can do it manually with `#define ARMA_64BIT_WORD 1` in `my_R_Directory/lib/R/library/RcppArmadillo/include/RcppArmadilloConfig.h`. See [here](https://stackoverflow.com/questions/40592054/large-matrices-in-rcpparmadillo-via-the-arma-64bit-word-define).
+
+# Acknowledgments
+
+We thank Alexander Engelhardt, Mathilde Galinier, Simon Wood, Herv\'e Pag\`es, and Martin Morgan for input in the development of GenoGAM
+
+# Session Info
+
+```{r}
+sessionInfo()
+```
+
+# References
+
