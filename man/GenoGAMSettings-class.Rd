@@ -29,17 +29,6 @@ GRanges object of regions, e.g. fragments. This regions are in turn used
 to compute the coverage via the IRanges::coverage function. Note, that there
 is a difference between the GAlignments object in the single and paired end
 case.
-
-optimControl has two maxit fields: 'maxit' refers to the maximal iterations
-in the cross validation procedure. Convergence rarely exceeds 50. 'betaMaxit'
-refers to the maximum iterations in estimation of the beta parameters.
-Convergence will sometimes need up to 1000 iterations. Also the parameter
-'trace' is overwritten. Please use the threshold setting through
-futile.logger::flog() to control trace information. All other parameters can
-be used as specified in ?optim. Note that the method used to estimate the
-beta vector is 'L-BFGS-B'. The method for cross validation can be changed.
-Keep in mind however, that not all methods will work, as it is not gradient
-based.
 }
 \section{Slots}{
 

@@ -24,6 +24,7 @@ Those features are currently missing but will be included with the next release
 
 	o Quality check plots
 	o Estimate of the peak width in peak calling
+	o Filtering
 	o ggplot2 plotting for GenoGAM fit objects
 	o access to knots and coefficients of the model
 
