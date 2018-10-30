@@ -71,7 +71,6 @@ Collate:
     'GenoGAMDataSetList-class.R'
     'GenoGAMList-class.R'
     'GenoGAMSetup-class.R'
-    'RcppExports.R'
     'background.R'
     'broadPeaks.R'
     'cv.R'
