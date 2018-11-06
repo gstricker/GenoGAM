@@ -4,60 +4,55 @@
 \alias{genogam}
 \title{genogam}
 \usage{
-genogam(ggd, lambda = NULL, family = mgcv::nb(), bpknots = 20,
-  kfolds = 10, intervallSize = 20, m = 2)
+genogam(ggd, lambda = NULL, theta = NULL, family = "nb", eps = 0,
+  kfolds = 10, intervalSize = 20, regions = 20, order = 2, m = 2)
 }
 \arguments{
-\item{ggd}{A GenoGAMDataSet object to be fitted.}
+\item{ggd}{The GenoGAMDataSet object to be fitted}
 
-\item{lambda}{The penalization parameter. Will be estimated if missing.}
+\item{lambda}{The penalization parameter. If NULL (default) estimated by
+cross validation. So far only one parameter for all splines is supported.}
 
-\item{family}{A distribution family object. So far only mgcv::nb() is allowed.}
+\item{theta}{The global overdispersion parameter. If NULL (default) estimated
+by cross validation.}
 
-\item{bpknots}{Number of basepairs per one knot, that is,  how dense should the knots
-be placed. The denser the knots, the more sensitive the fit. Note however, that computation
-time increases approximately cubic with every additional knot.}
+\item{family}{The distribution to be used. So far only Negative-Binomial (nb)
+is supported.}
 
-\item{kfolds}{An integer number giving the number of k-folds to be used in cross
-validation, if parameters need to be estimated.}
+\item{eps}{The factor for additional first-order regularization. This should be
+zero (default) in most cases. It can be useful for sparse data with many
+zero-counts regions or very low coverage. In this cases it is advised to use
+a small factor like 0.01, which would penalize those regions but not the ones
+with higher coverage. See Wood S., Generalized Additive Models (2006) for more.}
 
-\item{intervallSize}{The size of the intervalls to be used in cross validation.
-Short intervalls are used instead of single points to be left out due to
-spatial correlation. If replicates are present it is advised to make them bigger,
-e.g. 2*fragment size. Otherwise, depending on the density of the data, they should
-not exceed the size of a short read.}
+\item{kfolds}{The number of folds for cross validation}
 
-\item{m}{The penalization order of the P-Splines.}
+\item{intervalSize}{The size of the hold-out intervals in cross validation.
+If replicates are present, this can easily be increased to twice the fragment
+size to capture more of the local correlation. If no replicates are present,
+keep the number low to avoid heavy interpolation (default).}
+
+\item{regions}{How many regions should be used in cross validation? The number
+is an upper limit. It is usually corrected down, such that the total number of
+models computed during cross validation does not exceed the total number of
+models to compute for the entire genome. This is usually the case for small
+organisms such as yeast.}
+
+\item{order}{The order of the B-spline basis, which is order + 2, where 0
+is the lowest order. Thus order = 2 is equivalent to cubic order (= 3).}
+
+\item{m}{The order of penalization. Thus m = 2 penalizes the second differences.}
 }
 \value{
-A GenoGAM object containing the fits and parameters.
+The fit as a GenoGAM object
 }
 \description{
-This is the fitting function for GenoGAMDataSet. It processes the data
-in GenoGAMDataSet, estimates the overdispersion and the penalization parameter,
-passes all information to mgcv::gam in parallel fashion and extracts
-the results. So far the model is restricted to Negativ Binomial distribution (mgcv::nb()).
+The main modelling function.
 }
 \examples{
-\dontrun{
-## simple example
-config <- data.frame(ID = c("input", "IP"),
-                     file = c("myInput.bam",
-                              "myIP.bam"),,
-                    paired = c(FALSE, FALSE),
-                    type = c(0,1), stringsAsFactors = FALSE)
-bpk <- 100 ## basepairs per one knot
-chunkSize <- 5000
-overhang <- round(7*chunkSize/bpk) ##overhang with 7 knots
-knots <- chunkSize/bpk
-## build the GenoGAMDataSet
-gtiles <- GenoGAMDataSet(config = config, chunkSize = chunkSize, overhangSize = overhang,
-                         design = ~ s(x) + s(x, by = type))
-gtiles <- computeSizeFactors(gtiles)
-fits <- genogam(gtiles, bpknots = bpk)
-}
+ggd <- makeTestGenoGAMDataSet(sim = TRUE)
+res <- genogam(ggd, lambda = 266.8368, theta = 2.415738)
 }
 \author{
 Georg Stricker \email{georg.stricker@in.tum.de}
 }
-

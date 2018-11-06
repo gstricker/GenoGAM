@@ -1,8 +1,8 @@
 Package: GenoGAM
 Type: Package
 Title: A GAM based framework for analysis of ChIP-Seq data
-Version: 1.1.4
-Date: 2016-10-05
+Version: 2.1.1
+Date: 2018-10-25
 Authors@R: c(person("Georg", "Stricker", role = c("aut", "cre"), email
         = "georg.stricker@in.tum.de"), person("Alexander",
         "Engelhardt", role = c("aut"), email =
@@ -20,24 +20,31 @@ Description: This package allows statistical analysis of genome-wide
     achieved by parallelization over overlapping genomic intervals.
 License: GPL-2
 LazyData: true
+Encoding: UTF-8
 Depends:
-    R (>= 3.3),
-    Rsamtools (>= 1.18.2),
+    R (>= 3.5),
     SummarizedExperiment (>= 1.1.19),
-    GenomicRanges (>= 1.23.16),
-    methods
+    HDF5Array (>= 1.8.0),
+    rhdf5 (>= 2.21.6),
+    S4Vectors (>= 0.9.34),
+    Matrix (>= 1.2-8),
+    data.table (>= 1.9.4)
 Imports:
+    Rcpp (>= 0.12.14),
+    sparseinv (>= 0.1.1),
+    Rsamtools (>= 1.18.2),
+    GenomicRanges (>= 1.23.16),
     BiocParallel (>= 1.5.17),
-    data.table (>= 1.9.4),
     DESeq2 (>= 1.11.23),
     futile.logger (>= 1.4.1),
     GenomeInfoDb (>= 1.7.6),
     GenomicAlignments (>= 1.7.17),
     IRanges (>= 2.5.30),
-    mgcv (>= 1.8),
-    reshape2 (>= 1.4.1),
-    S4Vectors (>= 0.9.34),
-    Biostrings (>= 2.39.14)
+    Biostrings (>= 2.39.14),
+    DelayedArray (>= 0.3.19),
+    methods,
+    stats
+LinkingTo: Rcpp, RcppArmadillo
 Suggests:
     BiocStyle,
     chipseq (>= 1.21.2),
@@ -45,30 +52,41 @@ Suggests:
     genefilter (>= 1.54.2),
     ggplot2 (>= 2.1.0),
     testthat,
-    knitr
+    knitr,
+    rmarkdown
 VignetteBuilder: knitr
 NeedsCompilation: no
-RoxygenNote: 5.0.1
+RoxygenNote: 6.1.0
 biocViews: Regression, DifferentialPeakCalling, ChIPSeq,
-    DifferentialExpression, Genetics, Epigenetics
-Collate:
-    'GenomicTiles-class.R'
+    DifferentialExpression, Genetics, Epigenetics, WholeGenome,
+    ChipOnChip
+Collate: 
+    'Coordinates-class.R'
+    'GenoGAMFamily-class.R'
+    'helper.R'
     'GenoGAMSettings-class.R'
     'GenoGAM-class.R'
     'GenoGAM-package.R'
     'GenoGAMDataSet-class.R'
+    'GenoGAMDataSetList-class.R'
+    'GenoGAMList-class.R'
     'GenoGAMSetup-class.R'
+    'RcppExports.R'
+    'background.R'
+    'broadPeaks.R'
     'cv.R'
-    'devel.R'
     'diffBinding.R'
-    'filter.R'
+    'estimation.R'
     'genogam.R'
-    'helper.R'
+    'hdf5_handler.R'
+    'misc.R'
+    'narrowPeaks.R'
     'peakCalling.R'
     'plotting.R'
-    'qc.R'
+    'pvals.R'
     'readData.R'
     'sf.R'
+    'zzz.R'
 URL: https://github.com/gstricker/GenoGAM
 BugReports: https://github.com/gstricker/GenoGAM/issues
 Author: Georg Stricker [aut, cre], Alexander Engelhardt [aut], Julien

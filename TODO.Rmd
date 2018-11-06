@@ -1,0 +1,22 @@
+# To implement
+
+- Quality checks. Just like logging on different levels
+- Logging has to be output to files if threshold is debug
+- Plotting
+- differential binding
+- peak calling
+- export function
+- suppressWarnings does not work in tile construction if parallel backend is Snow
+- make exportable cross validation function
+- include gaussian
+- include quasi-binomial
+- get rid of warning messages during read data on makeTile level and on readingBAM level
+- deactivate ncv control within genogam
+- make predict function
+- keep in ggs object the design "i,e eg  (1,0,1,1)" and the spline templates matrices "ie, eg (X0, X1)".
+when computng spline errors i) do not rextract those and ii) compute directly the spline standard errors just once using and then put them back into the returned object by replicating values. You will gain a factor 4 on experiment with duplicates and much more if we apply it for large datasets (say groups of 100 vs 100 patients).
+
+- add logging in parallel computation (see vignette on BiocParallel: Logging)
+
+- set #define ARMA_64BIT_WORD or check if it is set and throw warning that matrices should not exceed certain size.
+- Minimal Lambda inclusion

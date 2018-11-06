@@ -3,42 +3,183 @@
 \docType{class}
 \name{GenoGAM-class}
 \alias{GenoGAM-class}
+\alias{GenoGAM}
+\alias{getSettings}
+\alias{getFamily}
+\alias{colData}
+\alias{getParams}
+\alias{getKnots}
+\alias{getCoefs}
+\alias{fits}
+\alias{se}
+\alias{dimnames}
+\alias{colnames}
+\alias{design,GenoGAM-method}
+\alias{sizeFactors,GenoGAM-method}
+\alias{getSettings,GenoGAM-method}
+\alias{getFamily,GenoGAM-method}
+\alias{colData,GenoGAM-method}
+\alias{getParams,GenoGAM-method}
+\alias{getCoefs,GenoGAM-method}
+\alias{getKnots,GenoGAM-method}
+\alias{assay,GenoGAM,missing-method}
+\alias{fits,GenoGAM-method}
+\alias{se,GenoGAM-method}
+\alias{pvalue,GenoGAM-method}
+\alias{colnames,GenoGAM-method}
+\alias{dimnames,GenoGAM-method}
+\alias{is.HDF5,GenoGAM-method}
+\alias{[,GenoGAM,GRanges,ANY,ANY-method}
 \title{GenoGAM class}
-\description{
-This class is designed to represent the model object containing the estimate parameters,
-arguments and finals fits of the model on a basepair level.
+\usage{
+GenoGAM(..., ggd = NULL, fromHDF5 = FALSE, split = FALSE)
+
+\S4method{design}{GenoGAM}(object)
+
+\S4method{sizeFactors}{GenoGAM}(object)
+
+\S4method{getSettings}{GenoGAM}(object)
+
+\S4method{getFamily}{GenoGAM}(object)
+
+\S4method{colData}{GenoGAM}(x)
+
+\S4method{getParams}{GenoGAM}(object)
+
+\S4method{getCoefs}{GenoGAM}(object)
+
+\S4method{getKnots}{GenoGAM}(object)
+
+\S4method{assay}{GenoGAM,missing}(x, i)
+
+\S4method{fits}{GenoGAM}(object)
+
+\S4method{se}{GenoGAM}(object)
+
+\S4method{pvalue}{GenoGAM}(object)
+
+\S4method{colnames}{GenoGAM}(x)
+
+\S4method{dimnames}{GenoGAM}(x)
+
+\S4method{is.HDF5}{GenoGAM}(object)
+
+\S4method{[}{GenoGAM,GRanges,ANY,ANY}(x, i)
 }
+\arguments{
+\item{...}{Slots of the GenoGAM class. See the slot description.}
+
+\item{ggd}{The initial GenoGAMDataSet object. Only needed if fromHDF5 is TRUE.}
+
+\item{fromHDF5}{A convenience argument to create a GenoGAM object from the already
+computed fits that are stored as HDF5 files}
+
+\item{split}{A logical argument indicating if the model was fitted in a
+per-chromosome fashion or not. Only needed if fromHDF5 is TRUE.}
+
+\item{object, x}{For use of S4 methods. The GenoGAM object.}
+
+\item{i}{A GRanges object (only for subsetting)}
+}
+\value{
+An object of the type GenoGAM.
+}
+\description{
+This is the class the holds the complete model as well all hyperparameters
+and settings that were used to fit it. It extends the RangedSummarizedExperiment
+class by adding a couple of more slots to hold hyperparameters and settings.
+The 'assays' slot holds the basepair fit and standard deviation. Additionally
+all knot positions and beta coefficients will be stored in the 'smooths' slot
+in order to be able to make use of the piecewise function that produces the
+fit. For information on the slots inherited from SummarizedExperiment
+check the respective class.
+
+The GenoGAM constructor, not designed to be actually used, by the user.
+Rather to be a point of reference and documentation for slots and how
+to access them.
+}
+\section{Methods (by generic)}{
+\itemize{
+\item \code{design}: An accessor to the design slot
+
+\item \code{sizeFactors}: An accessor to the sizeFactors slot
+
+\item \code{getSettings}: An accessor to the settings slot
+
+\item \code{getFamily}: An accessor to the family slot
+
+\item \code{colData}: An accessor to the factorialDesign slot.
+
+\item \code{getParams}: An accessor to the params slot
+
+\item \code{getCoefs}: An accessor to the coefs slot
+
+\item \code{getKnots}: An accessor to the knots slot
+
+\item \code{assay}: The accessor to the fits and standard errors
+
+\item \code{fits}: An accessor to the fits
+
+\item \code{se}: An accessor to the standard errors
+
+\item \code{pvalue}: An accessor to the pvalues
+
+\item \code{colnames}: column names of GenoGAM
+
+\item \code{dimnames}: The names of the dimensions of GenoGAM
+
+\item \code{is.HDF5}: A boolean function that is true if object uses HDF5 backend
+
+\item \code{[}: Additional subsetting by single brackets
+}}
+
 \section{Slots}{
 
 \describe{
-\item{\code{design}}{A mgcv-type formula object.}
+\item{\code{family}}{A GenoGAMFamily object}
 
-\item{\code{fits}}{A data.frame of the fits, the standard error and the first and
-second derivative of the fits for each experiment.}
+\item{\code{design}}{The formula of the model}
 
-\item{\code{positions}}{A GPos object of the positions and seqnames corresponding
-to the rows in the 'fits' slot.}
+\item{\code{sizeFactors}}{The offset used in the model.}
 
-\item{\code{smooths}}{A data.frame of knot positions and base function coefficients,
-in order to reproduce the splines and compute derivatives.}
+\item{\code{factorialDesign}}{The factorial design used. The same as colData in the
+GenoGAMDataSet}
 
-\item{\code{vcov}}{A list of covariance matrices for each tile fit.}
+\item{\code{params}}{All hyperparameters used to fit the data. The parameters
+estimated by cross validation can also be found here. But the parameters
+used in cross validation are in the settings slot.}
 
-\item{\code{experimentDesign}}{The design matrix according to which the fitting
-was performed.}
+\item{\code{settings}}{A GenoGAMSettings object representing the global
+settings that were used to compute the model.}
 
-\item{\code{fitparams}}{Global parameters 'lambda', 'theta', 'Coefficient of Variation' and
-the 'penalty order' used to compute the model.}
+\item{\code{coefs}}{The coefficients of the knots}
 
-\item{\code{family}}{The distribution family.}
+\item{\code{knots}}{The relative knot positions}
 
-\item{\code{cvparams}}{Parameters used for cross validation.}
-
-\item{\code{settings}}{The global and local settings that were used to compute the model.}
-
-\item{\code{tileSettings}}{A list of settings used to compute tiles.}
+\item{\code{hdf5}}{A logical slot indicating if the data is stored in a HDF5 format on hard drive}
 }}
+
+\examples{
+
+## creating test GenoGAM object
+gg <- makeTestGenoGAM()
+gg
+
+## using accessors
+design(gg)
+sizeFactors(gg)
+getSettings(gg)
+getFamily(gg)
+colData(gg)
+getParams(gg)
+getCoefs(gg)
+getKnots(gg)
+rowRanges(gg)
+assay(gg)
+assays(gg)
+fits(gg) 
+se(gg)
+}
 \author{
 Georg Stricker \email{georg.stricker@in.tum.de}
 }
-

@@ -1,6 +1,211 @@
-## ================
-## Cross Validation
-## ================
+## TODO: startup time of workers is approx 1/4 of the computation time. try to reduce
+## e.g. package loading or passing setup object and initialize in the parallel
+
+################################
+## Cross Validation functions ##
+################################
+
+#' The cross validation function
+#' 
+#' @param ggd The GenoGAMDataSet object
+#' @param setup The GenoGAMSetup object
+#' @param coords The coordinates as a IRanges object
+#' @param id The vector of ids
+#' @param folds The number of folds
+#' @param intervalSize The interval size of consecutive points to be left out
+#' @param fn The log-likelihood function to be used
+#' @param method The optim method
+#' @param control Other control parameters according to optim
+#' @param estimControl Control parameters according to parameter estimation method
+#' @param ... Possibly other parameters
+#' @return The optimized params (They are initially part of the setup object)
+#' @noRd
+.doCrossValidation <- function(ggd, setup, coords, id, folds, intervalSize,
+                               fn, method = "Nelder-Mead",
+                               control = list(maxit=100, fnscale=-1), ...) {
+    
+    setups <- vector("list", length(id))
+    for (ii in 1:length(id)) {
+        setups[[ii]] <- .initiate(ggd, setup, coords, id[ii])
+    }
+    names(setups) <- as.character(id)
+    cvint <- .leaveOutConsecutiveIntervals(folds, intervalSize, 
+                                           length(slot(setups[[1]],
+                                                       "response")))
+    ov <- getOverhangSize(ggd)
+    par <- slot(setup, "params")
+    initpars <- NULL
+    if(is.null(par$lambda)) {
+        initpars$lambda <- log(slot(setups[[1]], "params")[["lambda"]])
+    }
+    if(is.null(par$theta)) {
+        initpars$theta <- log(slot(setups[[1]], "params")[["theta"]])
+    }
+    fixedpars <- list(lambda = par$lambda, theta = par$theta)
+    estimControl <- slot(setup, "control")
+    input <- paste0("Performing Cross-Validation with the following parameters:\n",
+                    "  Tile indeces: ", paste(id, collapse = ","), "\n",
+                    "  Number of folds: ", folds, "\n",
+                    "  Interval size: ", intervalSize, "\n",
+                    "  Optim method: ", method, "\n",
+                    "  Maximal iterations: ", control$maxit, "\n",
+                    "  Maximal L-BFGS iterations: ", estimControl$maxiter, "\n",
+                    "  L-BFGS epsilon: ", estimControl$eps, "\n",
+                    "  L-BFGS alpha: ", estimControl$alpha, "\n",
+                    "  L-BFGS rho: ", estimControl$rho, "\n",
+                    "  L-BFGS c: ", estimControl$c, "\n",
+                    "  L-BFGS m: ", estimControl$m, "\n",
+                    "  Parameters to optimize: ", paste(names(initpars), collapse = ","), "\n",
+                    "  Value of fixed parameters: ", paste(fixedpars, collapse = ", "), "\n")
+    futile.logger::flog.debug(input)
+
+    if(flog.threshold() == "DEBUG" | flog.threshold() == "TRACE") {
+        control$trace <- 10
+    }
+
+    ## reduce number of workers to reduce overhead if necessary
+    ## Parameters
+    currentBackend <- BiocParallel::registered()
+    currentWorkers <- currentBackend[[1]]$workers
+    currentFits <- folds * length(id)
+    computationTime <- 0.2
+    wakeUpTime <- 16
+
+    ## Compute optimal number
+    ## This is the solution to the equation argmin_m = (n * t)/m + u * m
+    ## where
+    ## n = currentFits = the total number of models to fit
+    ## t = computationTime per Fit/Model
+    ## m = number of workers (the parameter of interest)
+    ## u = wakeUpTime = the time it takes a worker to start in SnowParam
+    nworkers <- as.integer(sqrt((currentFits * computationTime)/wakeUpTime))
+    backend <- BiocParallel::registered()[[1]]
+
+    if(is(backend, "MulticoreParam") & currentWorkers > nworkers) {
+        futile.logger::flog.debug(paste("Reducing number of workers during hyperparameter optimization to", nworkers))
+        worker_backup <- currentBackend[[1]]$workers
+        ## note, setting the workers in the variable, does change it in the
+        ## overall setting because it is of class envRefClass
+        currentBackend[[1]]$workers <- nworkers 
+    }
+    
+    pars <- optim(initpars, fn, setup = setups, CV_intervals = cvint,
+                  ov = ov, method = method, control = control, 
+                  fixedpars = fixedpars, ...)
+    params <- exp(pars$par)
+
+    ## set the number of workers back to the specified number
+    if(is(backend, "MulticoreParam") & currentWorkers > nworkers) {
+        futile.logger::flog.debug(paste("Re-setting number of workers to", worker_backup))
+        currentBackend[[1]]$workers <- worker_backup
+    }
+
+    futile.logger::flog.debug("Optimal parameter values:", params, capture = TRUE)
+    
+    if(length(params) == 1) {
+        fixedpars[sapply(fixedpars, is.null)] <- params
+        params <- unlist(fixedpars)
+    }
+    return(params)
+}
+
+#' The loglikelihood function
+#' 
+#' @param pars The parameters to be optimized. If .loglik is used within optim,
+#' the pars argument will be coerced to vector even if list was given
+#' @param setup The GenoGAMSetup object
+#' @param CV_intervals A list of the indices of the data points split by
+#' the folds
+#' @param ov The size of the overlap. In order to be excluded from the
+#' evaluation of the likelihood
+#' @param fixedpars The parameters to be used in the model but kept
+#' fixed, as they don't need optimization.
+#' @param ... Other parameters
+#' @return The mean log-likelihood over all models
+#' @noRd
+.loglik <- function(pars, setup, CV_intervals, ov, fixedpars, ...){
+
+    if(is.null(fixedpars$lambda)) {
+        fixedpars$lambda <- exp(pars[["lambda"]])
+    }
+    if(is.null(fixedpars$theta)) {
+        fixedpars$theta <- exp(pars[["theta"]])
+    }
+
+    if(fixedpars$lambda/fixedpars$theta < 100) {
+        fixedpars$lambda <- fixedpars$theta * 100
+    }
+
+    futile.logger::flog.debug(paste0("Using values: lambda = ", fixedpars$lambda, "and theta = ", fixedpars$theta))
+    
+    fullpred <- lapply(1:length(setup), function(y) {
+        rep(NA, length(slot(setup[[1]], "response")))
+    })
+    names(fullpred) <- names(setup)
+    ids <- expand.grid(folds = 1:length(CV_intervals), tiles = 1:length(setup))
+
+    .local <- function(iter, ids, setup, CV_intervals) {
+        suppressPackageStartupMessages(require(GenoGAM, quietly = TRUE))
+        id <- ids[iter,]
+        
+        trainsetup <- setup[[id$tiles]]
+        trainX <- slot(trainsetup, "designMatrix")
+        trainY <- slot(trainsetup, "response")
+        testX <- trainX[CV_intervals[[id$folds]],]
+        slot(trainsetup, "designMatrix") <- trainX[-CV_intervals[[id$folds]],]
+        slot(trainsetup, "response") <- trainY[-CV_intervals[[id$folds]]]
+        slot(trainsetup, "offset") <- slot(trainsetup, "offset")[-CV_intervals[[id$folds]]]
+                    
+        betas <- .estimateParams(trainsetup)
+            
+        pred <- exp(testX %*% betas$par)
+        return(pred)
+    }
+    
+    for(ii in 1:length(setup)) {
+        slot(setup[[ii]], "params")$theta <- fixedpars$theta
+        slot(setup[[ii]], "params")$lambda <- fixedpars$lambda
+    }
+   
+    cvs <- BiocParallel::bplapply(1:nrow(ids), .local, ids = ids,
+                                  setup = setup, CV_intervals = CV_intervals)
+
+    for(ii in 1:length(cvs)) {
+        id <- ids[ii,]
+        fullpred[[id$tiles]][CV_intervals[[id$folds]]] <- cvs[[ii]]
+    }
+
+    res <- lapply(1:length(fullpred), function(y) {
+        dens <- dnbinom(slot(setup[[y]], "response"), size = fixedpars$theta,
+                        mu = fullpred[[y]], log = TRUE)
+        return(dens)
+    })
+
+    #############################################################
+    ## out-of-sample log-likelihood of the fit on the chunk part of a tile
+    
+    ## ll: sum CV log-lik by regions and parameter combination
+    ## we take the average i.e we assume all regions have the same length.
+    nfuns <- .nfun(setup[[1]])
+    
+    ll <- mean(sapply(res, function(y) {
+        if(ov < 1) {
+            res <- sum(y)
+        }
+        else {
+            ymat <- matrix(y, ncol = nfuns)
+            borders <- c(1:ov, (nrow(ymat) - ov + 1):nrow(ymat))
+            if(length(borders) >= nrow(ymat)) {
+                futile.logger::flog.error("The overhang size covers the entire tile. Change parameter to a lower meaningful value. See getOverhangSize().")
+            }
+            res <- sum(ymat[-borders,])
+        }
+        return(res)
+    }))
+    
+    return(ll)
+}
+
 
 #' Create folds for Crossfold Validation bu consecutive intervals
 #'
@@ -9,7 +214,7 @@
 #' @param tileSize The size of one tile.
 #' @return A list of as many elements as there are folds. Each element
 #' contains the rows that are part of this fold.
-#' @author Georg Stricker \email{stricker@@genzentrum.lmu.de}
+#' @noRd
 .leaveOutConsecutiveIntervals <- function(folds, intervalSize, tileSize){
     if(intervalSize >= 50) {
         warning("CV using large interval may only make sense if all experiments have replicates")
@@ -30,367 +235,3 @@
         )
     return(res)
 }
-
-#' the function to be maximised for Cross Validation
-#' Procedure:
-#' 1. Fit model on all but the left out intervalls
-#' 2. compute log-Likelihood on predicted values vs. real values
-#' 3. compute the mean and return
-#' @param pars The parameters to be optimized.
-#' @param gtiles The datasets the likelihood is computed on.
-#' @param CV_intervals A list of folds containing the rows to be left out for each fold.
-#' @param formula A formula object.
-#' @param experimentMatrix The experiment matrix with columnnames being the tracks and
-#' rownames being the samples.
-#' @param chunkCoords A GRanges object representing the chunk coordinates.
-#' @param fixedpars A list of two elements - lambda and theta - being specified. If not
-#' they are estimated.
-#' @param verbose Print some more text?
-#' @param logging Activate logging?
-#' @param ... Additional parameters forwarded to mgcv::gam
-#' @return A single numeric value - the likelihood for this combination of parameters.
-#' @author Georg Stricker \email{stricker@@genzentrum.lmu.de}
-.loglik <- function(pars, gtiles, CV_intervals, formula,
-                    fixedpars = list(lambda = NULL, theta = NULL), ...){
-    coords <- attr(gtiles, "settings")$chunks
-    if(is.null(fixedpars$lambda)) {
-        lambda <- exp(pars[["lambda"]])
-    }
-    if(is.null(fixedpars$theta)) {
-        theta <- exp(pars["theta"])
-    }
-    
-    fullpred <- lapply(1:length(gtiles), function(y) {
-        rep(NA, nrow(gtiles[[1]]))
-    })
-    names(fullpred) <- names(gtiles)
-    ids <- expand.grid(folds = 1:length(CV_intervals), tiles = 1:length(gtiles))
-
-    lambdaFun <- function(iter, ids, gtiles, CV_intervals, formula, 
-                          fixedpars) {
-        suppressPackageStartupMessages(require(GenoGAM, quietly = TRUE))
-        id <- ids[iter,]
-        
-        testset <- gtiles[[id$tiles]][CV_intervals[[id$folds]],]
-        trainset <- gtiles[[id$tiles]][-CV_intervals[[id$folds]],]
-                    
-        nvars <- length(.getVars(formula)) - 1
-        mod <- mgcv::gam(formula, data = trainset, family = mgcv::nb(theta=fixedpars$theta), method = "REML",
-                         sp = rep(fixedpars$lambda, nvars), ...)
-            
-        pred <- mgcv::predict.gam(mod, newdata = testset, type="response")
-        return(pred)
-    }
-    
-    cvs <- bplapply(1:nrow(ids), lambdaFun, ids = ids, gtiles = gtiles,
-                    CV_intervals, formula = formula, fixedpars = fixedpars)
-
-    for(ii in 1:length(cvs)) {
-        id <- ids[ii,]
-        fullpred[[id$tiles]][CV_intervals[[id$folds]]] <- cvs[[ii]]
-    }
-
-    res <- lapply(1:length(fullpred), function(y) {
-        dens <- dnbinom(gtiles[[y]]$value, size = theta, mu = fullpred[[y]], log = TRUE)
-        gtiles[[y]]$yhat <- fullpred[[y]]
-        gtiles[[y]]$ll <- dens
-        return(gtiles[[y]])
-    })
-    names(res) <- names(fullpred)
-
-    #############################################################
-    ## out-of-sample log-likelihood of the fit on the chunk part of a tile
-    
-    ## ll: sum CV log-lik by regions and parameter combination
-    ## we take the average i.e we assume all regions have the same length.
-    ll <- mean(sapply(1:length(res), function(y) {
-        id <- names(res)[y]
-        chunks <- c(start(coords[mcols(coords)$id == as.integer(id),]),
-                    end(coords[mcols(coords)$id == as.integer(id),]))
-        sum(.untile(res[[id]], chunks)$ll, na.rm = TRUE)
-    }))
-    return(ll)
-}
-
-#' Main function to perform cross validation
-#'
-#' @param par The parameters to be optimized.
-#' @param fn A function to be used for optimization.
-#' @param data The datasets the likelihood is computed on.
-#' @param formula A formula object.
-#' @param experimentMatrix The experiment matrix with columnnames being the tracks and
-#' rownames being the samples.
-#' @param folds Number of k-folds.
-#' @param intervalSize The size of the consecutive intervals.
-#' @param fixedpars A list of two elements - lambda and theta - being specified. If not
-#' they are estimated.
-#' @param colData The sample specific values, that should be added to the data.
-#' @param verbose Print some more text?
-#' @param logging Activate logging?
-.doCrossValidation <- function(par, fn, data, formula, folds, intervallSize,
-                               fixedpars, experimentDesign, sf,
-                               method = "Nelder-Mead",
-                               control = list(maxit=100, fnscale=-1), ...) {
-    
-    settings <- metadata(data)
-    meltedData <- .meltGTile(data, experimentDesign, sf, formula)
-    attr(meltedData, "settings") <- settings
-    cvint <- .leaveOutConsecutiveIntervals(folds, intervallSize, nrow(meltedData[[1]]))
-    
-    pars <- optim(par, fn, gtiles = meltedData, CV_intervals = cvint,
-                  formula = formula, 
-                  fixedpars = fixedpars,
-                  method = method, control = control, ...)
-    params <- exp(pars$par)
-    
-    if(length(params) == 1) {
-        fixedpars[sapply(fixedpars, is.null)] <- params
-        params <- unlist(fixedpars)
-    }
-    return(params)
-}
-
-## #' Shiny application to check fit of estimated lambda and theta
-## #'
-## #' A shiny application to check the fit of the estimated lambda and theta
-## #'
-## #' @param obj The return object of \code{\link{estimateLambda}}
-## #' @return Starts a shiny application in webbrowser
-## #' @author Georg Stricker \email{stricker@@genzentrum.lmu.de}
-## #' @export
-## plotCV <- function(obj){
-##     if(!requireNamespace("shiny", quietly = TRUE)) {
-##             stop("This is a shinyApp. Please install shiny.", call. = FALSE)
-##         }
-##     require(shiny)
-##     lambdaTemp <- attr(obj,"lambdaTemp")
-##     dataTemp <- attr(obj,"dataTemp")
-##     bestLambdaTemp <- attr(obj,"bestLambdaTemp")
-
-##     lambdaVector <- read.table(lambdaTemp, header = TRUE)[,1]
-##     numLambda <- lambdaVector[1]
-##     lambdaVector <- lambdaVector[-1]
-##     bestLambda <- read.table(bestLambdaTemp, header = TRUE)[,1]
-##     ll <- format(lambdaVector,scientific=TRUE,digits=3)
-##     dr <- as.list(dataTemp)
-##     data <- fread(as.character(dr[1]), header = TRUE)
-##     data[,sample := as.factor(sample)]
-##     tracks <- levels(data$sample)
-##     ## regionNames <- saply(1:length(dr), function(y) paste("region", y, sep = ""))
-##     ## names(dr) <- regionNames
-##     if (numLambda > 1) {
-##         chosenLambdas <- paste("Best Lambda chosen as", bestLambda[1])
-##         for (ii in 2:numLambda) chosenLambdas <- paste(chosenLambdas, "and", bestLambda[ii])
-##         app <- shinyApp(ui = shinyUI(fluidPage(
-##                             titlePanel("Lambda debug plot"),
-##                             sidebarLayout(position = "left",
-##                                           sidebarPanel(
-##                                               helpText(chosenLambdas),
-##                                               sliderInput("lambda",
-##                                                           label = "Lambda value:",
-##                                                           min = 1, max = length(lambdaVector), value = which(lambdaVector == bestLambda[1]), step = 1,
-##                                                           ##                              ticks = ll[seq(1,length(lambdaVector),length.out=10)],
-##                                                           ticks = TRUE,
-##                                                           width = '1000px'
-##                                                           ),
-##                                               sliderInput("lambda2",
-##                                                           label = "Lambda value:",
-##                                                           min = 1, max = length(lambdaVector), value = which(lambdaVector == bestLambda[2]), step = 1,
-##                                                           ##                              ticks = ll[seq(1,length(lambdaVector),length.out=10)],
-##                                                           ticks = TRUE,
-##                                                           width = '1000px'
-##                                                           ),
-##                                               br(),
-##                                               selectInput("region", 
-##                                                           label = "Choose a region to display",
-##                                                           choices = dr,
-##                                                           selected = "region1"),
-##                                               br(),
-##                                               selectInput("inputTrack",
-##                                                           label = "First track",
-##                                                           choices = tracks,
-##                                                           selected = tracks[1]),
-##                                               br(),
-##                                               selectInput("ipTrack",
-##                                                           label = "Second track",
-##                                                           choices = tracks,
-##                                                           selected = tracks[2])),
-##                                           mainPanel(
-##                                               tableOutput("value1"),
-##                                               tableOutput("value2"),
-##                                               plotOutput("inputPlot"),
-##                                               plotOutput("ipPlot")
-##                                               )
-##                                           )
-##                             )),
-                        
-##                         server = shinyServer(function(input, output, session) {
-##                             is.installed <- require(ggplot2)
-##                             if (!is.installed) {
-##                                 plotData <- function(data,title) {
-##                                     plot(data$x,data$counts, col = "darkgray", xlab = "position", ylab = "counts and estimates", main = title)
-##                                     lines(data$x,data$pred, col = "blue")
-##                                 }
-##                             }
-##                             else {
-##                                 plotData <- function(df,title) {
-##                                     ggplot(data = df, aes(x=x,y=counts)) + geom_point(color = "darkgray") + 
-##                                         geom_line(aes(x = x,y = pred), color = "blue") + ggtitle(title)
-##                                 }
-##                             }
-##                             myLambda <- reactive({
-##                                 as.character(lambdaVector[input$lambda])
-##                             })
-                            
-##                             myLambda2 <- reactive({
-##                                 as.character(lambdaVector[input$lambda2])
-##                             })
-                            
-##                             dataset <- reactive({
-##                                 df <- fread(as.character(input$region), header = TRUE)
-##                                 df
-##                             })
-
-##                             track1 <- reactive({
-##                                 as.character(input$inputTrack)
-##                             })
-
-##                             track2 <- reactive({
-##                                 as.character(input$ipTrack)
-##                             })
-                            
-##                             output$value1 <- renderTable({
-##                                 data.frame(
-##                                     Name = c("First Lambda Value", "Second Lambda Value"),
-##                                     Value = c(as.character(c(myLambda())), as.character(c(myLambda2()))),
-##                                     stringsAsFactors=FALSE
-##                                     )
-##                             })
-
-##                             ## output$value2 <- renderTable({
-##                             ##     data.frame(
-##                             ##         Name = c("Lambda Value"),
-##                             ##         Value = as.character(c(myLambda2())),
-##                             ##         stringsAsFactors=FALSE
-##                             ##         )
-##                             ## })
-                            
-##                             ## only works with one lambda for now
-##                             output$inputPlot <- renderPlot({
-##                                 df <- dataset()
-##                                 name <- track1()
-##                                 dfInput <- df[sample == name & lambda1 == myLambda(),]
-##                                 plotData(dfInput,name)
-##                             })
-                            
-##                             output$ipPlot <- renderPlot({
-##                                 df <- dataset()
-##                                 name <- track2()
-##                                 dfIP <- df[sample == name & lambda1 == myLambda2(),]
-##                                 plotData(dfIP,name)
-##                             })
-
-##                             session$onSessionEnded(function() {
-##                                 stopApp()
-##                             })
-##                         }))
-##     }
-
-##     else {
-
-##         app <- shinyApp(ui = shinyUI(fluidPage(
-##                             titlePanel("Lambda debug plot"),
-##                             sidebarLayout(position = "left",
-##                                           sidebarPanel(
-##                                               helpText(paste("Best Lambda chosen as",bestLambda)),
-##                                               sliderInput("lambda",
-##                                                           label = "Lambda value:",
-##                                                           min = 1, max = length(lambdaVector), value = which(lambdaVector == bestLambda[1]), step = 1,
-##                                                           ##                              ticks = ll[seq(1,length(lambdaVector),length.out=10)],
-##                                                           ticks = TRUE,
-##                                                           width = '1000px'
-##                                                           ),
-##                                               br(),
-##                                               selectInput("region", 
-##                                                           label = "Choose a region to display",
-##                                                           choices = dr,
-##                                                           selected = "region1"),
-##                                               br(),
-##                                               selectInput("inputTrack",
-##                                                           label = "First track",
-##                                                           choices = tracks,
-##                                                           selected = tracks[1]),
-##                                               br(),
-##                                               selectInput("ipTrack",
-##                                                           label = "Second track",
-##                                                           choices = tracks,
-##                                                           selected = tracks[2])),
-##                                           mainPanel(
-##                                               tableOutput("value"),
-##                                               plotOutput("inputPlot"),
-##                                               plotOutput("ipPlot")
-##                                               )
-##                                           )
-##                             )),
-                        
-##                         server = shinyServer(function(input, output, session) {
-##                             is.installed <- require(ggplot2)
-##                             if (!is.installed) {
-##                                 plotData <- function(data,title) {
-##                                     plot(data$x,data$counts, col = "darkgray", xlab = "position", ylab = "counts and estimates", main = title)
-##                                     lines(data$x,data$pred, col = "blue")
-##                                 }
-##                             }
-##                             else {
-##                                 plotData <- function(df,title) {
-##                                     ggplot(data = df, aes(x=x,y=counts)) + geom_point(color = "darkgray") + 
-##                                         geom_line(aes(x = x,y = pred), color = "blue") + ggtitle(title)
-##                                 }
-##                             }
-##                             myLambda <- reactive({
-##                                 as.character(lambdaVector[input$lambda])
-##                             })
-                            
-##                             dataset <- reactive({
-##                                 df <- fread(as.character(input$region), header = TRUE)
-##                                 df
-##                             })
-
-##                             track1 <- reactive({
-##                                 as.character(input$inputTrack)
-##                             })
-
-##                             track2 <- reactive({
-##                                 as.character(input$ipTrack)
-##                             })
-                            
-##                             output$value <- renderTable({
-##                                 data.frame(
-##                                     Name = c("Lambda Value"),
-##                                     Value = as.character(c(myLambda())),
-##                                     stringsAsFactors=FALSE
-##                                     )
-##                             })
-##                             ## only works with one lambda for now
-##                             output$inputPlot <- renderPlot({
-##                                 df <- dataset()
-##                                 name <- track1()
-##                                 dfInput <- df[sample == name & lambda1 == myLambda(),]
-##                                 plotData(dfInput,name)
-##                             })
-                            
-##                             output$ipPlot <- renderPlot({
-##                                 df <- dataset()
-##                                 name <- track2()
-##                                 dfIP <- df[sample == name & lambda1 == myLambda(),]
-##                                 plotData(dfIP,name)
-##                             })
-
-##                             session$onSessionEnded(function() {
-##                                 stopApp()
-##                             })
-##                         }))
-##     }
-##     runApp(app)
-## }
-
