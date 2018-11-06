@@ -1,5 +1,0 @@
-qualityCheck(ggd)
-filtered_ggd <- filter(ggd)
-qualityCheck(filtered_ggd)
-filtered_ggd2 <- filter(filtered_ggd)
-qualityCheck(filtered_ggd2)
