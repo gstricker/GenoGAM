@@ -107,9 +107,12 @@
     idx <- S4Vectors::queryHits(IRanges::findOverlaps(rowRanges, r))
 
     ## compute zscore for all positions
+    ## drop = FALSE makes sure, that both matrices are not converted to numeric
+    ## vectors prior to subsetting and computation, keeping memory load low
+    ## subset afterwards (pnorm can't deal with DelayedMatrix objects)
     zscore <- (fits[idx, sx, drop = FALSE] - mu0)/
         (sqrt(se[idx, sx, drop = FALSE]^2 + var0))
-    pvals <- -pnorm(-zscore, log.p = TRUE)
+    pvals <- -pnorm(-zscore[,1], log.p = TRUE)
     pos <- start(r):end(r)
 
     signifPos <- pos[as.numeric(pvals) >= -log(cutoff)]
@@ -231,9 +234,12 @@
     idx <- S4Vectors::queryHits(IRanges::findOverlaps(rowRanges[[chr]], r))
 
     ## compute zscore for all positions
+    ## drop = FALSE makes sure, that both matrices are not converted to numeric
+    ## vectors prior to subsetting and computation, keeping memory load low
+    ## subset afterwards (pnorm can't deal with DelayedMatrix objects)
     zscore <- (fits[[chr]][idx, sx, drop = FALSE] - mu0)/
         (sqrt(se[[chr]][idx, sx, drop = FALSE]^2 + var0))
-    pvals <- -pnorm(-zscore, log.p = TRUE)
+    pvals <- -pnorm(-zscore[,1], log.p = TRUE)
     pos <- start(r):end(r)
     
     signifPos <- pos[as.numeric(pvals) >= -log(cutoff)]
