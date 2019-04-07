@@ -652,7 +652,9 @@ setMethod("[", c("GenoGAMDataSetList", "GRanges"), function(x, i) {
             len <- length(l) + current - 1
             end(l) <- end(l) + max(end(coords)[current - 1], 0)
             start(l) <- start(l) + max(end(coords)[current - 1], 0)
-            coords[current:len,] <- l
+            start(coords)[current:len] <- start(l)
+            end(coords)[current:len] <- end(l)
+            width(coords)[current:len] <- width(l)
             current <- len + 1
         }
     }

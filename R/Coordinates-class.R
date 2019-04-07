@@ -102,9 +102,10 @@ setReplaceMethod("start", "Coordinates", function(x, value) {
     return(x)
 })
 
-#' @describeIn Coordinates The width accessor
-setMethod("width", "Coordinates", function(x) {
-    x@listData$width
+#' @describeIn Coordinates Replacement method for width
+setReplaceMethod("width", "Coordinates", function(x, value) {
+    x@listData$width <- value
+    return(x)
 })
 
 setMethod("rbind", "Coordinates", function(...) {
