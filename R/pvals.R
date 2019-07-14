@@ -30,9 +30,10 @@ computeSignificance <- function(gg, log.p = FALSE) {
         futile.logger::flog.info("Computing positionwise p-values")
     }
 
-    .pvals(gg, log.p)
+    res <- .pvals(gg, log.p)
     
     futile.logger::flog.info("DONE")
+    return(res)
 }
 
 .pvals <- function(gg, log.p = FALSE) {
@@ -43,23 +44,23 @@ computeSignificance <- function(gg, log.p = FALSE) {
         
         if(hdf5) {
             futile.logger::flog.debug("Data is in HDF5 format and split by chromosome")
-            .pvals_hdf5_split(gg, log.p)
+            res <- .pvals_hdf5_split(gg, log.p)
         }
         else {
             futile.logger::flog.debug("Data is split by chromosome")
-            .pvals_split(gg, log.p)
+            res <- .pvals_split(gg, log.p)
         }
     }
     else {
         if(hdf5) {
             futile.logger::flog.debug("Data is in HDF5 format")
-            .pvals_hdf5(gg, log.p)
+            res <- .pvals_hdf5(gg, log.p)
         }
         else {
-            .pvals_default(gg, log.p)
+            res <- .pvals_default(gg, log.p)
         }
     }
-    invisible(NULL)
+    return(res)
 }
 
 ## compute pvalue for GenoGAM object without HDF5 and no split
@@ -79,7 +80,8 @@ computeSignificance <- function(gg, log.p = FALSE) {
     ## add pvals to assay fields. SummarizedExperiment has some control functions
     ## guarding the structure of the data, so we have to directly plug it in to
     ## avoid copying
-    gg@assays$data@listData$pvalue <- df
+    gg@assays@data@listData$pvalue <- df
+    return(gg)
 }
 
 ## compute pvalue for GenoGAM object with HDF5 and no split
@@ -126,10 +128,12 @@ computeSignificance <- function(gg, log.p = FALSE) {
     ## guarding the structure of the data, so we have to directly plug it in to
     ## avoid copying
     h5 <- HDF5Array::HDF5Array(seedFile, h5name)
-    gg@assays$data@listData$pvalue <- h5
+    gg@assays@data@listData$pvalue <- h5
 
     ## close again
     rhdf5::H5Fclose(h5file)
+
+    return(gg)
 }
 
 ## compute pvalue for GenoGAM object with HDF5 and split
@@ -147,7 +151,7 @@ computeSignificance <- function(gg, log.p = FALSE) {
         }
     }
 
-    lapply(chroms, function(y) {
+    pvals_list <- lapply(chroms, function(y) {
         futile.logger::flog.debug(paste("Computing p-values for chromosome", y))
         ## make HDF5 group in existing HDF5 file for p-values
         dims <- dim(SummarizedExperiment::assay(gg@data[[y]]))
@@ -183,11 +187,17 @@ computeSignificance <- function(gg, log.p = FALSE) {
         ## guarding the structure of the data, so we have to directly plug it in to
         ## avoid copying
         h5 <- HDF5Array::HDF5Array(seedFile, h5name)
-        gg@data[[y]]@assays$data@listData$pvalue <- h5
 
         ## close again
         rhdf5::H5Fclose(h5file)
+	return(h5)
     })
+
+    for(ii in 1:length(chrom)) {
+        gg@data[[chrom[ii]]]@assays@data@listData$pvalue <- pvals_list[[ii]]
+    }
+
+    return(gg)
 }
 
 .hdf5_block_pval <- function(x, se, base, h5file, name, id, log.p = FALSE) {
@@ -222,7 +232,7 @@ computeSignificance <- function(gg, log.p = FALSE) {
     names(base) <- tracks
 
     ## now compute p-values
-    lapply(chroms, function(y) {
+    pvals_list <- lapply(chroms, function(y) {
         futile.logger::flog.debug(paste("Computing p-values for chromosome", y))
         pvals <- lapply(tracks, function(id) {
             res <- 2*pnorm(base[[id]], mean = abs(fits(gg)[[y]][[id]]), sd = se(gg)[[y]][[id]], log.p = log.p)
@@ -234,7 +244,10 @@ computeSignificance <- function(gg, log.p = FALSE) {
         ## add pvals to assay fields. SummarizedExperiment has some control functions
         ## guarding the structure of the data, so we have to directly plug it in to
         ## avoid copying
-        gg@data[[y]]@assays$data@listData$pvalue <- df
-        invisible(NULL)
+        return(df)
     })
+    for(ii in 1:length(chroms)) {
+        gg@data[[chroms[ii]]]@assays@data@listData$pvalue <- pvals_list[[ii]]
+    }
+    return(gg)
 }

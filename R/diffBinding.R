@@ -45,7 +45,7 @@ computeRegionSignificance <- function(fit, regions, smooth = NULL) {
     ## first subset by regions
     fit_regions <- fit[regions]
     ## compute pvalues on reduced fit
-    computeSignificance(fit_regions, log.p = TRUE)
+    fit_regions <- computeSignificance(fit_regions, log.p = TRUE)
 
     ## no need for HDF5 conditions as it does not affect the computation
     if(is_split){

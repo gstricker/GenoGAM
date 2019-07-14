@@ -131,7 +131,7 @@ se(result)
 
 2. Compute log p-values
 ```{r}
-computeSignificance(result)
+result <- computeSignificance(result)
 
 pvalue(result)
 ```
@@ -389,7 +389,7 @@ plotGenoGAM(fit, ranges = ranges, scale = FALSE)
 We test for each smooth and at each position $x$ the null hypothesis that it values 0 by a call to *computeSignificance()*. This gives us pointwise p-values. 
 
 ```{r}
-computeSignificance(fit)
+fit <- computeSignificance(fit)
 pvalue(fit)
 ```
 
