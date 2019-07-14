@@ -647,7 +647,7 @@ setMethod("[", c("GenoGAMDataSetList", "GRanges"), function(x, i) {
             ov <- IRanges::findOverlaps(rr[[ii]], getIndex(x))
             sh <- S4Vectors::subjectHits(ov)
             qh <- S4Vectors::queryHits(ov)
-            l <- range(IRanges::splitAsList(qh, sh))
+            l <- range(S4Vectors::splitAsList(qh, sh))
             l <- Coordinates(l[,1], l[,2])
             len <- length(l) + current - 1
             end(l) <- end(l) + max(end(coords)[current - 1], 0)
@@ -672,7 +672,7 @@ setMethod("[", c("GenoGAMDataSetList", "GRanges"), function(x, i) {
     ov <- IRanges::findOverlaps(rr, ind)
     sh <- Rle(S4Vectors::subjectHits(ov))
     qh <- queryHits(ov)
-    l <- range(IRanges::splitAsList(qh, sh))
+    l <- range(S4Vectors::splitAsList(qh, sh))
     l <- IRanges::IRanges(l[,1], l[,2])
     return(l)
 

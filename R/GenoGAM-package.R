@@ -5,6 +5,7 @@
 #' @import HDF5Array
 #' @import rhdf5
 #' @import BiocParallel
+#' @import S4Vectors
 #' @import IRanges
 #' @import GenomicRanges
 #' @importFrom futile.logger flog.info
@@ -15,7 +16,6 @@
 #' @importFrom futile.logger flog.threshold
 #' @importFrom stats runif rnbinom as.formula dnbinom optim na.omit pnorm p.adjust stepfun
 #' @importFrom SummarizedExperiment assay assays assays<- colData colData<- SummarizedExperiment rowRanges rowRanges<-
-#' @importFrom S4Vectors metadata metadata<- DataFrame Rle queryHits
 #' @importFrom DelayedArray rowRanges
 #' @importFrom DESeq2 design design<- sizeFactors
 #' @importFrom GenomeInfoDb seqlevels seqlevels<- seqlengths

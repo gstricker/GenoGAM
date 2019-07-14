@@ -1,8 +1,8 @@
 Package: GenoGAM
 Type: Package
 Title: A GAM based framework for analysis of ChIP-Seq data
-Version: 2.1.10
-Date: 2018-10-25
+Version: 2.3.2
+Date: 2019-06-08
 Authors@R: c(person("Georg", "Stricker", role = c("aut", "cre"), email
         = "georg.stricker@protonmail.com"), person("Alexander",
         "Engelhardt", role = c("aut"), email =
@@ -26,7 +26,7 @@ Depends:
     SummarizedExperiment (>= 1.1.19),
     HDF5Array (>= 1.8.0),
     rhdf5 (>= 2.21.6),
-    S4Vectors (>= 0.9.34),
+    S4Vectors (>= 0.23.10),
     Matrix (>= 1.2-8),
     data.table (>= 1.9.4)
 Imports:

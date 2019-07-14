@@ -285,7 +285,7 @@ setMethod("getKnots", "GenoGAM", function(object) {
 
 #' @describeIn GenoGAM The accessor to the fits and standard errors
 setMethod("assay", c("GenoGAM", "missing"), function(x, i) {
-    res <- slot(x, "assays")
+    res <- assays(x)
     if(length(res) < 1) {
         return(NULL)
     }
